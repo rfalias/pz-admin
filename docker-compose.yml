@@ -1,0 +1,37 @@
+services:
+  pz-admin:
+    build: .
+    image: pzadmin:latest
+    container_name: pz-admin
+    restart: unless-stopped
+    ports:
+      - "8080:8000"
+    environment:
+      CONFIG_DIR: /config
+      SERVER_NAME: pzserver
+      PZ_CONTAINER_NAME: projectzomboid
+      SESSION_SECRET: change-this-to-a-random-string
+      USERS_FILE: /app/users.json
+      RCON_HOST: host.docker.internal
+      RCON_PORT: 27015
+      RCON_PASSWORD: changeme
+      APP_DATA_DIR: /app/data
+      DEATH_SCAN_INTERVAL_SECONDS: 60
+      CONNECT_HOST: yourdomain.example.com
+    volumes:
+      - /path/to/project-zomboid-config:/config
+      - ./users.json:/app/users.json
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    labels:
+      - traefik.enable=true
+      - traefik.protocol=http
+      - traefik.http.middlewares.pzadmin-whitelist.ipwhitelist.sourcerange=127.0.0.1/32, 192.168.0.0/16, 172.0.0.0/8, 0.0.0.0/0
+      - traefik.http.routers.pzadmin.rule=Host(`pzadmin.example.com`)
+      - traefik.http.routers.pzadmin.entrypoints=websecure
+      - traefik.http.services.pzadmin.loadbalancer.server.port=8000
+      - traefik.http.routers.pzadmin.service=pzadmin
+      - traefik.http.routers.pzadmin.tls.certresolver=myresolver
+      - traefik.http.routers.pzadmin.middlewares=pzadmin-whitelist

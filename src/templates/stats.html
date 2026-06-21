@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+
+{% if not db_exists %}
+<p class="empty">No player database found at this path.</p>
+{% else %}
+<table class="stats-table">
+  <thead>
+    <tr>
+      <th title="Online status">Online</th>
+      <th>Username</th>
+      <th>Deaths</th>
+      <th>Role</th>
+      <th>Steam ID</th>
+      <th>Last Connection</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="stats-tbody">
+    {% for u in users %}
+    {% set char = characters.get(u.username|lower) %}
+    <tr data-username="{{ u.username|lower }}">
+      <td><span class="status-dot offline-dot" data-online-dot></span></td>
+      <td>{{ u.username }}</td>
+      <td>{{ death_counts.get(u.username|lower, 0) }}</td>
+      <td>{{ u.role_name or "" }}</td>
+      <td class="mono">{{ u.steamid or "" }}</td>
+      <td>{{ u.lastConnection or "" }}</td>
+      <td>
+        {% if char %}
+        <button type="button" class="char-toggle" onclick="toggleCharRow(this)">Character ▾</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% if char %}
+    <tr class="char-row" style="display:none;">
+      <td></td>
+      <td colspan="6">
+        <div class="char-panel">
+          <p class="help">Character data is reverse-engineered from the save file's binary format and may be incomplete or wrong &mdash; treat as best-effort.</p>
+          {% set c = char.character %}
+          <div class="char-grid">
+            <div>
+              <strong>{{ (c.forename or "") + " " + (c.surname or "") }}</strong>
+              {% if c.nickname %}<span class="help">"{{ c.nickname }}"</span>{% endif %}
+              <p class="help">Profession: {{ c.profession or "unknown" }}{% if c.voice %} &middot; Voice: {{ c.voice }}{% endif %}</p>
+              <p class="help">Position: {{ "%.0f"|format(char.x) }}, {{ "%.0f"|format(char.y) }}, {{ "%.0f"|format(char.z) }} &middot; {{ "Dead" if char.is_dead else "Alive" }}</p>
+              {% if c.traits %}<p class="help">Traits: {{ c.traits|join(", ") }}</p>{% endif %}
+            </div>
+            {% if c.perk_levels %}
+            <table class="perk-table">
+              <thead><tr><th>Perk</th><th>Level</th><th>XP</th></tr></thead>
+              <tbody>
+                {% for perk, level in c.perk_levels.items() %}
+                <tr><td>{{ perk }}</td><td>{{ level }}</td><td>{{ c.perk_xp.get(perk, "") }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% endif %}
+          </div>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<script>
+  function toggleCharRow(btn) {
+    var row = btn.closest("tr").nextElementSibling;
+    if (!row) return;
+    var visible = row.style.display !== "none";
+    row.style.display = visible ? "none" : "table-row";
+    btn.textContent = visible ? "Character ▾" : "Character ▴";
+  }
+</script>
+
+<script>
+  function refreshOnlinePlayers() {
+    fetch("/stats/players")
+      .then(function (resp) { return resp.ok ? resp.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var players = data.players || [];
+        var onlineSet = {};
+        players.forEach(function (name) { onlineSet[name.toLowerCase()] = true; });
+        document.querySelectorAll("#stats-tbody tr").forEach(function (row) {
+          var dot = row.querySelector("[data-online-dot]");
+          if (!dot) return;
+          var isOnline = !!onlineSet[row.dataset.username];
+          dot.classList.toggle("online-dot", isOnline);
+          dot.classList.toggle("offline-dot", !isOnline);
+          dot.title = isOnline ? "online" : "offline";
+        });
+      });
+  }
+
+  refreshOnlinePlayers();
+  setInterval(refreshOnlinePlayers, 10000);
+</script>
+{% endblock %}

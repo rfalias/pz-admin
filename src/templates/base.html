@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PZ Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Project Zomboid Admin</h1>
+    <nav>
+      <a href="/server" class="{{ 'active' if active == 'server' else '' }}">Server</a>
+      <a href="/sandbox" class="{{ 'active' if active == 'sandbox' else '' }}">Sandbox</a>
+      <a href="/logs" class="{{ 'active' if active == 'logs' else '' }}">Logs</a>
+      <a href="/stats" class="{{ 'active' if active == 'stats' else '' }}">Stats</a>
+    </nav>
+    <div class="header-right">
+      <span class="status-badge" id="status-badge" title="Checking...">
+        <span class="status-dot"></span>
+        <span class="status-text">checking...</span>
+      </span>
+      <form method="post" action="/rcon/save">
+        <button type="submit" class="save-server-btn">Save World</button>
+      </form>
+      <form method="post" action="/restart"
+            onsubmit="return confirm('Restart the {{ container }} container now? Players will be disconnected.');">
+        <button type="submit" class="restart-btn">Restart Server</button>
+      </form>
+      <span class="user">{{ user }}</span>
+      <a href="/logout">Logout</a>
+    </div>
+  </header>
+
+  {% if flash %}
+  <div class="flash">{{ flash }}</div>
+  {% endif %}
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="/static/filter.js" defer></script>
+  <script src="/static/status.js" defer></script>
+</body>
+</html>

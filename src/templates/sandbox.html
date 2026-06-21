@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+{% if not entries %}
+<p class="empty">No settings found. Check that CONFIG_DIR and SERVER_NAME point at a valid server config.</p>
+{% else %}
+<div class="search-bar">
+  <input type="search" id="settings-search" placeholder="Search settings by name, description, or value..." autocomplete="off">
+</div>
+<form method="post" action="/sandbox">
+  {% macro render_items(items, prefix) %}
+    {% for item in items %}
+      {% set path = prefix ~ item.key %}
+      {% if item.type == 'table' %}
+        <details class="group" open>
+          <summary>{{ item.key }}</summary>
+          <div class="group-body">
+            {{ render_items(item.children, path ~ '.') }}
+          </div>
+        </details>
+      {% else %}
+        <div class="field">
+          <label for="sb-{{ path }}">{{ item.key }}</label>
+          {% if item.type == 'bool' %}
+          <input type="checkbox" id="sb-{{ path }}" name="{{ path }}" {% if item.value == 'true' %}checked{% endif %}>
+          {% else %}
+          <input type="text" id="sb-{{ path }}" name="{{ path }}" value="{{ item.value }}">
+          {% endif %}
+          {% if item.comment %}<p class="help">{{ item.comment }}</p>{% endif %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  {% endmacro %}
+  {{ render_items(entries, "") }}
+  <div class="save-bar">
+    <button type="submit" class="save-btn">Save Sandbox Settings</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ server_name }} - Server Status</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>{{ server_name }}</h1>
+    <div class="header-right">
+      <span class="status-badge" id="status-badge" title="Checking...">
+        <span class="status-dot"></span>
+        <span class="status-text">checking...</span>
+      </span>
+    </div>
+  </header>
+
+  <main>
+    {% if description %}<p class="help">{{ description }}</p>{% endif %}
+
+    <div class="group">
+      <div class="group-summary-static">How to connect</div>
+      <div class="group-body">
+        {% if connect_host %}
+        <p class="connect-line"><span class="mono">{{ connect_host }}:{{ connect_port }}</span></p>
+        {% else %}
+        <p class="empty">Connection address not configured.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-summary-static">Players online</div>
+      <div class="group-body">
+        <p class="empty" id="online-loading">Checking...</p>
+        <ul class="online-list" id="online-list" style="display:none;"></ul>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-summary-static">Deaths</div>
+      <div class="group-body">
+        {% if deaths %}
+        <table class="stats-table">
+          <thead><tr><th>Username</th><th>Deaths</th></tr></thead>
+          <tbody>
+            {% for d in deaths %}
+            <tr><td>{{ d.username }}</td><td>{{ d.count }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No deaths recorded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function relativeTime(iso) {
+      if (!iso) return "";
+      var started = new Date(iso).getTime();
+      if (isNaN(started)) return "";
+      var diffSec = Math.max(0, Math.floor((Date.now() - started) / 1000));
+      var units = [["d", 86400], ["h", 3600], ["m", 60]];
+      for (var i = 0; i < units.length; i++) {
+        var value = Math.floor(diffSec / units[i][1]);
+        if (value > 0) return "up " + value + units[i][0];
+      }
+      return "up " + diffSec + "s";
+    }
+
+    function refreshDashboard() {
+      var badge = document.getElementById("status-badge");
+      var text = badge.querySelector(".status-text");
+      var loading = document.getElementById("online-loading");
+      var list = document.getElementById("online-list");
+
+      fetch("/dashboard/raw")
+        .then(function (resp) { return resp.ok ? resp.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          badge.classList.remove("status-running", "status-stopped", "status-unknown");
+          if (data.status === "running") {
+            badge.classList.add("status-running");
+            var uptime = relativeTime(data.started_at);
+            text.textContent = "online" + (uptime ? " (" + uptime + ")" : "");
+          } else {
+            badge.classList.add("status-stopped");
+            text.textContent = "offline";
+          }
+
+          var players = data.players || [];
+          if (data.rcon_error) {
+            loading.textContent = "Player list unavailable.";
+            loading.style.display = "";
+            list.style.display = "none";
+          } else if (players.length === 0) {
+            loading.textContent = "No players currently online.";
+            loading.style.display = "";
+            list.style.display = "none";
+          } else {
+            loading.style.display = "none";
+            list.style.display = "";
+            list.innerHTML = "";
+            players.forEach(function (name) {
+              var li = document.createElement("li");
+              li.textContent = name;
+              list.appendChild(li);
+            });
+          }
+        })
+        .catch(function () {
+          badge.classList.remove("status-running");
+          badge.classList.add("status-unknown");
+          text.textContent = "unreachable";
+        });
+    }
+
+    refreshDashboard();
+    setInterval(refreshDashboard, 15000);
+  </script>
+</body>
+</html>

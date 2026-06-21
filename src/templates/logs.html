@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+
+<form method="get" action="/logs" class="logs-controls" id="logs-form">
+  <div class="logs-controls-form">
+    <label for="lines">Lines per category</label>
+    <input type="number" id="lines" name="lines" value="{{ lines }}" min="10" max="2000" step="10">
+    <button type="submit" class="save-btn">Refresh</button>
+  </div>
+  <label class="auto-refresh-toggle">
+    <input type="checkbox" id="auto-refresh">
+    Auto-refresh (5s)
+  </label>
+</form>
+
+<div class="category-filters">
+  {% for key, label in all_categories.items() %}
+  <label class="category-chip">
+    <input type="checkbox" name="categories" value="{{ key }}" form="logs-form"
+           {% if key in selected_categories %}checked{% endif %}>
+    {{ label }}
+  </label>
+  {% endfor %}
+</div>
+
+<table class="stats-table log-table">
+  <thead>
+    <tr>
+      <th class="log-col-time">Time</th>
+      <th class="log-col-category">Category</th>
+      <th>Message</th>
+    </tr>
+  </thead>
+  <tbody id="log-tbody">
+    {% for e in entries %}
+    <tr>
+      <td class="mono log-col-time">{{ e.timestamp }}</td>
+      <td class="log-col-category"><span class="category-badge">{{ e.category }}</span></td>
+      <td class="log-message">{{ e.message }}</td>
+    </tr>
+    {% endfor %}
+    {% if not entries %}
+    <tr><td colspan="3" class="empty">No log entries found for the selected categories.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<script>
+  var tbody = document.getElementById("log-tbody");
+  var linesInput = document.getElementById("lines");
+  var autoRefresh = document.getElementById("auto-refresh");
+  var refreshTimer = null;
+
+  function isScrolledToTop() {
+    return window.scrollY < 50;
+  }
+
+  function selectedCategories() {
+    return Array.from(document.querySelectorAll('input[name="categories"]:checked')).map(function (el) {
+      return el.value;
+    });
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function renderRows(entries) {
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty">No log entries found for the selected categories.</td></tr>';
+      return;
+    }
+    var html = "";
+    entries.forEach(function (e) {
+      html += "<tr><td class=\"mono log-col-time\">" + escapeHtml(e.timestamp) +
+        "</td><td class=\"log-col-category\"><span class=\"category-badge\">" + escapeHtml(e.category) +
+        "</span></td><td class=\"log-message\">" + escapeHtml(e.message) + "</td></tr>";
+    });
+    tbody.innerHTML = html;
+  }
+
+  function refreshLogs() {
+    var stickToTop = isScrolledToTop();
+    var params = new URLSearchParams();
+    params.set("lines", linesInput ? linesInput.value : {{ lines }});
+    selectedCategories().forEach(function (c) { params.append("categories", c); });
+
+    fetch("/logs/raw?" + params.toString())
+      .then(function (resp) { return resp.ok ? resp.json() : null; })
+      .then(function (entries) {
+        if (entries === null) return;
+        renderRows(entries);
+        if (stickToTop) window.scrollTo(0, 0);
+      });
+  }
+
+  function setAutoRefresh(enabled) {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    if (enabled) refreshTimer = setInterval(refreshLogs, 5000);
+    localStorage.setItem("pzAdminLogAutoRefresh", enabled ? "1" : "0");
+  }
+
+  if (autoRefresh) {
+    autoRefresh.checked = localStorage.getItem("pzAdminLogAutoRefresh") === "1";
+    setAutoRefresh(autoRefresh.checked);
+    autoRefresh.addEventListener("change", function () {
+      setAutoRefresh(autoRefresh.checked);
+    });
+  }
+
+  document.querySelectorAll('input[name="categories"]').forEach(function (el) {
+    el.addEventListener("change", function () {
+      document.getElementById("logs-form").requestSubmit();
+    });
+  });
+</script>
+{% endblock %}

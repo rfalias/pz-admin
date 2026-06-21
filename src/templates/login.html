@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - PZ Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+  <form method="post" action="/login" class="login-form">
+    <h1>Project Zomboid Admin</h1>
+    <span class="status-badge login-status" id="status-badge" title="Checking...">
+      <span class="status-dot"></span>
+      <span class="status-text">checking...</span>
+    </span>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <label>Username
+      <input type="text" name="username" autofocus required>
+    </label>
+    <label>Password
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit">Log in</button>
+  </form>
+  <script src="/static/status.js" defer></script>
+</body>
+</html>
