@@ -52,7 +52,7 @@ def get_value(entries: list[dict], key: str, default: str = "") -> str:
     return entry["value"] if entry else default
 
 
-def _split_list(value: str) -> list[str]:
+def split_list(value: str) -> list[str]:
     return [v.strip() for v in value.split(";") if v.strip()]
 
 
@@ -63,8 +63,8 @@ def validate_mods(entries: list[dict]) -> str | None:
     if mods is None or workshop is None:
         return None
 
-    mod_ids = _split_list(mods["value"])
-    workshop_ids = _split_list(workshop["value"])
+    mod_ids = split_list(mods["value"])
+    workshop_ids = split_list(workshop["value"])
     missing = len(mod_ids) - len(workshop_ids)
     if missing > 0:
         return (

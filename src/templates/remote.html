@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="help">Run RCON commands directly against the server. Build a command below, or edit the preview text directly before running.</p>
+
+<div class="field">
+  <label for="command-select">Command</label>
+  <select id="command-select"></select>
+  <p class="help" id="command-description"></p>
+</div>
+
+<div id="param-fields" class="settings-grid"></div>
+
+<div class="field">
+  <label for="command-preview">Command to run</label>
+  <input type="text" id="command-preview" class="mono-input">
+  <button type="button" id="run-btn" class="save-btn">Run command</button>
+</div>
+
+<div id="result-panel" class="result-panel" style="display:none;">
+  <p class="help" id="result-meta"></p>
+  <pre id="result-output" class="log-table-output"></pre>
+</div>
+
+<div class="group">
+  <div class="group-summary-static">History (this session)</div>
+  <div class="group-body">
+    <p class="empty" id="history-empty">No commands run yet.</p>
+    <ul class="online-list" id="history-list" style="display:none;"></ul>
+  </div>
+</div>
+
+<script id="commands-data" type="application/json">{{ commands | tojson }}</script>
+<script src="/static/remote.js" defer></script>
+{% endblock %}

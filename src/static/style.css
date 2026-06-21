@@ -167,6 +167,43 @@ nav a.active, nav a:hover {
   color: var(--muted);
 }
 
+.stats-table td input[type="text"] {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.row-remove-btn {
+  background: var(--danger);
+  color: white;
+  border: none;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.row-remove-btn:hover { opacity: 0.9; }
+
+#add-row-btn {
+  margin-bottom: 1rem;
+}
+
+.import-url-input {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
 .char-toggle {
   background: var(--bg);
   color: var(--text);
@@ -513,4 +550,74 @@ main {
   color: #ff8080;
   font-size: 0.85rem;
   margin: 0;
+}
+
+#command-select {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.mono-input {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: monospace;
+  margin-bottom: 0.7rem;
+}
+
+.field select {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.coords-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.coords-row input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.flag-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.result-panel {
+  margin-top: 1rem;
+}
+
+.log-table-output {
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #d0d0d0;
+}
+
+.history-time {
+  color: var(--muted);
+  font-size: 0.75rem;
 }

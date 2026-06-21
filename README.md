@@ -1,7 +1,8 @@
 # pz-admin
 
 A small FastAPI web app for managing a self-hosted Project Zomboid dedicated
-server: edit server/sandbox settings, view logs, view player stats, and
+server: edit server/sandbox settings, manage mods (with Steam Workshop URL
+import), view logs and player stats, run arbitrary RCON commands, and
 restart/save the server, all from a browser.
 
 ## Setup

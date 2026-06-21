@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+<p class="help">Shortcut for editing just the Mods and WorkshopItems fields in the server settings ini. Each row pairs one mod ID with its Steam Workshop ID.</p>
+
+{% if mods_warning %}
+<p class="warning">{{ mods_warning }}</p>
+{% endif %}
+
+<div class="field">
+  <label for="import-url">Import from Steam Workshop URL</label>
+  <div class="logs-controls-form">
+    <input type="text" id="import-url" class="import-url-input" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=...">
+    <button type="button" class="char-toggle" id="import-btn">Fetch</button>
+  </div>
+  <p class="help" id="import-status">Follows required-item dependencies automatically. Review the rows it adds before saving.</p>
+</div>
+
+<form method="post" action="/mods" id="mods-form">
+  <table class="stats-table" id="mods-table">
+    <thead>
+      <tr>
+        <th>Mod ID</th>
+        <th>Workshop ID</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="mods-tbody">
+      {% for mod_id, workshop_id in rows %}
+      <tr>
+        <td><input type="text" name="mod_id" value="{{ mod_id }}" placeholder="Base"></td>
+        <td><input type="text" name="workshop_id" value="{{ workshop_id }}" placeholder="123456789"></td>
+        <td><button type="button" class="row-remove-btn" onclick="this.closest('tr').remove()">Remove</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="button" class="char-toggle" id="add-row-btn">Add mod</button>
+
+  <div class="save-bar">
+    <button type="submit" class="save-btn">Save Mods</button>
+  </div>
+</form>
+
+<script src="/static/mods.js" defer></script>
+{% endblock %}

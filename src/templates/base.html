@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PZ Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -12,8 +13,10 @@
     <nav>
       <a href="/server" class="{{ 'active' if active == 'server' else '' }}">Server</a>
       <a href="/sandbox" class="{{ 'active' if active == 'sandbox' else '' }}">Sandbox</a>
+      <a href="/mods" class="{{ 'active' if active == 'mods' else '' }}">Mods</a>
       <a href="/logs" class="{{ 'active' if active == 'logs' else '' }}">Logs</a>
       <a href="/stats" class="{{ 'active' if active == 'stats' else '' }}">Stats</a>
+      <a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>
     </nav>
     <div class="header-right">
       <span class="status-badge" id="status-badge" title="Checking...">

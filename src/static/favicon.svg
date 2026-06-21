@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#1b1d1f"/>
+  <text x="32" y="46" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        font-size="38" font-weight="700" fill="#5b8c3a" text-anchor="middle">Z</text>
+</svg>

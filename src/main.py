@@ -1,6 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from itertools import zip_longest
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Query, Request
@@ -15,7 +16,9 @@ import docker_control
 import ini_config
 import log_tables
 import lua_config
+import mod_parser
 import rcon_client
+import rcon_commands
 from auth import verify_login
 
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
@@ -180,6 +183,75 @@ async def server_save(request: Request):
     return RedirectResponse("/server", status_code=303)
 
 
+@app.get("/mods", response_class=HTMLResponse)
+def mods_page(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    entries = ini_config.parse_ini(SERVER_INI_PATH)
+    mod_ids = ini_config.split_list(ini_config.get_value(entries, "Mods"))
+    workshop_ids = ini_config.split_list(ini_config.get_value(entries, "WorkshopItems"))
+    rows = list(zip_longest(mod_ids, workshop_ids, fillvalue=""))
+    return templates.TemplateResponse(
+        request,
+        "mods.html",
+        {
+            "active": "mods",
+            "user": user,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "config_path": str(SERVER_INI_PATH),
+            "rows": rows,
+            "mods_warning": ini_config.validate_mods(entries),
+        },
+    )
+
+
+@app.post("/mods")
+async def mods_save(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    form = await request.form()
+    mod_ids = form.getlist("mod_id")
+    workshop_ids = form.getlist("workshop_id")
+    # Pair by row position (not independently) so a mod with a still-blank
+    # workshop id (or vice versa) doesn't get shifted out of alignment.
+    pairs = [
+        (m.strip(), w.strip())
+        for m, w in zip_longest(mod_ids, workshop_ids, fillvalue="")
+        if m.strip() or w.strip()
+    ]
+    entries = ini_config.parse_ini(SERVER_INI_PATH)
+    ini_config.apply_form(
+        entries,
+        {
+            "Mods": ";".join(m for m, _ in pairs),
+            "WorkshopItems": ";".join(w for _, w in pairs),
+        },
+    )
+    ini_config.write_ini(SERVER_INI_PATH, entries)
+    flash = "Mods saved. Restart the server to apply changes."
+    mods_warning = ini_config.validate_mods(entries)
+    if mods_warning:
+        flash += f" Warning: {mods_warning}"
+    request.session["flash"] = flash
+    return RedirectResponse("/mods", status_code=303)
+
+
+@app.post("/mods/import")
+async def mods_import(request: Request):
+    if not current_user(request):
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    body = await request.json()
+    url = (body.get("url") or "").strip()
+    workshop_id = mod_parser.extract_workshop_id(url)
+    if not workshop_id:
+        return JSONResponse({"error": "Could not find a workshop ID in that URL"}, status_code=400)
+    mods, errors = await asyncio.to_thread(mod_parser.resolve_mod_tree, workshop_id)
+    return JSONResponse({"mods": mods, "errors": errors})
+
+
 @app.get("/sandbox", response_class=HTMLResponse)
 def sandbox_page(request: Request):
     user = current_user(request)
@@ -307,6 +379,39 @@ def rcon_save(request: Request):
         request.session["flash"] = f"Failed to send save command via RCON: {exc}"
     referer = request.headers.get("referer", "/server")
     return RedirectResponse(referer, status_code=303)
+
+
+@app.get("/remote", response_class=HTMLResponse)
+def remote_page(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "remote.html",
+        {
+            "active": "remote",
+            "user": user,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "commands": rcon_commands.COMMANDS,
+        },
+    )
+
+
+@app.post("/remote/run")
+async def remote_run(request: Request):
+    if not current_user(request):
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    body = await request.json()
+    command = (body.get("command") or "").strip()
+    if not command:
+        return JSONResponse({"error": "No command given"}, status_code=400)
+    try:
+        response = rcon_client.execute(RCON_HOST, RCON_PORT, RCON_PASSWORD, command)
+        return JSONResponse({"response": response, "error": None})
+    except Exception as exc:
+        return JSONResponse({"response": None, "error": str(exc)})
 
 
 @app.post("/restart")
