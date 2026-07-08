@@ -29,4 +29,140 @@
   </div>
 </form>
 {% endif %}
+
+<div class="danger-zone">
+  <div class="danger-zone-header">Danger Zone</div>
+  <div class="danger-zone-body">
+    <div class="danger-zone-row">
+      <div>
+        <strong>Wipe Server</strong>
+        <p class="help">Stop the server, delete world/player save data, then restart. This cannot be undone.</p>
+      </div>
+      <button type="button" class="wipe-open-btn" id="wipe-open-btn">Wipe Server</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="wipe-modal" style="display:none">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wipe-modal-title">
+    <div class="modal-header danger-header">
+      <span id="wipe-modal-title">Wipe Server</span>
+    </div>
+    <div class="modal-body">
+      <p class="wipe-warning-text">This will permanently delete the selected server data. The server will be stopped, data deleted, then restarted. <strong>There is no undo.</strong></p>
+      <div class="wipe-options">
+        <label class="wipe-option">
+          <input type="checkbox" id="wipe-world" checked>
+          <span>
+            <strong>World data</strong> — map chunks, loot, player characters<br>
+            <code class="wipe-path">Saves/Multiplayer/{{ server_name }}/</code>
+          </span>
+        </label>
+        <label class="wipe-option">
+          <input type="checkbox" id="wipe-players">
+          <span>
+            <strong>Player database</strong> — accounts and whitelist<br>
+            <code class="wipe-path">db/{{ server_name }}.db</code>
+          </span>
+        </label>
+      </div>
+      <p class="wipe-confirm-label">Type <strong>wipe</strong> to enable the button:</p>
+      <input type="text" id="wipe-confirm-input" class="wipe-confirm-input" placeholder="wipe" autocomplete="off" spellcheck="false">
+      <div id="wipe-result" class="wipe-result" hidden></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="modal-cancel-btn" id="wipe-cancel-btn">Cancel</button>
+      <button type="button" class="wipe-confirm-btn" id="wipe-confirm-btn" disabled>Wipe Server</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var openBtn = document.getElementById("wipe-open-btn");
+  var modal = document.getElementById("wipe-modal");
+  var cancelBtn = document.getElementById("wipe-cancel-btn");
+  var confirmBtn = document.getElementById("wipe-confirm-btn");
+  var confirmInput = document.getElementById("wipe-confirm-input");
+  var result = document.getElementById("wipe-result");
+
+  function openModal() {
+    confirmInput.value = "";
+    confirmBtn.disabled = true;
+    result.hidden = true;
+    result.textContent = "";
+    confirmBtn.textContent = "Wipe Server";
+    cancelBtn.disabled = false;
+    cancelBtn.textContent = "Cancel";
+    confirmInput.disabled = false;
+    modal.style.display = "flex";
+    confirmInput.focus();
+  }
+
+  function closeModal() {
+    modal.style.display = "none";
+  }
+
+  openBtn.addEventListener("click", openModal);
+  cancelBtn.addEventListener("click", closeModal);
+
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  // Ensure clean initial state regardless of any CSS
+  modal.style.display = "none";
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && modal.style.display !== "none") closeModal();
+  });
+
+  confirmInput.addEventListener("input", function () {
+    confirmBtn.disabled = confirmInput.value.trim().toLowerCase() !== "wipe";
+  });
+
+  confirmBtn.addEventListener("click", function () {
+    var wipeWorld = document.getElementById("wipe-world").checked;
+    var wipePlayers = document.getElementById("wipe-players").checked;
+    if (!wipeWorld && !wipePlayers) {
+      result.textContent = "Select at least one thing to wipe.";
+      result.className = "wipe-result wipe-result-error";
+      result.hidden = false;
+      return;
+    }
+
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    confirmInput.disabled = true;
+    confirmBtn.textContent = "Wiping…";
+    result.hidden = true;
+
+    fetch("/wipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wipe_world: wipeWorld, wipe_players: wipePlayers }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          result.textContent = "Error: " + data.error;
+          result.className = "wipe-result wipe-result-error";
+        } else {
+          result.textContent = data.message;
+          result.className = "wipe-result wipe-result-ok";
+          setTimeout(function () { window.location.reload(); }, 2500);
+        }
+        result.hidden = false;
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = "Close";
+      })
+      .catch(function (err) {
+        result.textContent = "Error: " + err;
+        result.className = "wipe-result wipe-result-error";
+        result.hidden = false;
+        cancelBtn.disabled = false;
+      });
+  });
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_logs_subnav.html" %}
+
+<form method="get" action="/logs/battlepass" class="bp-controls" id="bp-form">
+  <label for="bp-file">File</label>
+  <select id="bp-file" name="file" onchange="this.form.requestSubmit()">
+    {% for fname in file_names %}
+    <option value="{{ fname }}" {% if fname == selected_file %}selected{% endif %}>{{ fname }}</option>
+    {% endfor %}
+    {% if not file_names %}
+    <option value="">No files found</option>
+    {% endif %}
+  </select>
+
+  <label for="bp-lines">Lines</label>
+  <input type="number" id="bp-lines" name="lines" value="{{ lines }}" min="10" max="2000" step="50">
+
+  <label for="bp-player">Player</label>
+  <input type="text" id="bp-player" name="player" value="{{ player_filter }}" placeholder="filter by player…">
+
+  <button type="submit" class="save-btn">Refresh</button>
+
+  <label class="auto-refresh-toggle">
+    <input type="checkbox" id="bp-auto-refresh">
+    Auto-refresh (5s)
+  </label>
+</form>
+
+<table class="stats-table log-table">
+  <thead>
+    <tr>
+      <th class="log-col-time">Time</th>
+      <th style="white-space:nowrap">Tag</th>
+      <th style="white-space:nowrap">Player</th>
+      <th>Fields</th>
+    </tr>
+  </thead>
+  <tbody id="bp-tbody">
+    {% for e in entries %}
+    <tr>
+      <td class="mono log-col-time">{{ e.timestamp }}</td>
+      <td><span class="bp-badge bp-{{ e.group }}">{{ e.tag }}</span></td>
+      <td class="bp-player-cell">{{ e.player or "" }}</td>
+      <td>
+        <div class="bp-fields">
+          {% for k, v in e.fields.items() %}
+          <span class="bp-kv">
+            <span class="bp-key">{{ k }}=</span>{% if v == "nil" %}<span class="bp-nil">nil</span>{% else %}<span class="bp-val">{{ v }}</span>{% endif %}
+          </span>
+          {% endfor %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    {% if not entries %}
+    <tr><td colspan="4" class="empty">No entries found.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<script>
+(function () {
+  var tbody   = document.getElementById("bp-tbody");
+  var fileEl  = document.getElementById("bp-file");
+  var linesEl = document.getElementById("bp-lines");
+  var playerEl = document.getElementById("bp-player");
+  var autoEl  = document.getElementById("bp-auto-refresh");
+  var timer   = null;
+
+  function esc(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderRows(entries) {
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No entries found.</td></tr>';
+      return;
+    }
+    var html = "";
+    entries.forEach(function (e) {
+      var fields = "";
+      Object.entries(e.fields || {}).forEach(function([k, v]) {
+        fields += '<span class="bp-kv"><span class="bp-key">' + esc(k) + '=</span>';
+        if (v === "nil") {
+          fields += '<span class="bp-nil">nil</span>';
+        } else {
+          fields += '<span class="bp-val">' + esc(v) + '</span>';
+        }
+        fields += '</span>';
+      });
+      html += '<tr>'
+        + '<td class="mono log-col-time">' + esc(e.timestamp) + '</td>'
+        + '<td><span class="bp-badge bp-' + esc(e.group) + '">' + esc(e.tag) + '</span></td>'
+        + '<td class="bp-player-cell">' + esc(e.player || "") + '</td>'
+        + '<td><div class="bp-fields">' + fields + '</div></td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function refresh() {
+    var params = new URLSearchParams();
+    if (fileEl && fileEl.value)   params.set("file",   fileEl.value);
+    if (linesEl && linesEl.value) params.set("lines",  linesEl.value);
+    if (playerEl && playerEl.value) params.set("player", playerEl.value);
+    fetch("/logs/battlepass/raw?" + params.toString())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) { if (data) renderRows(data); });
+  }
+
+  function setAuto(on) {
+    clearInterval(timer);
+    timer = null;
+    if (on) timer = setInterval(refresh, 5000);
+    localStorage.setItem("bpAutoRefresh", on ? "1" : "0");
+  }
+
+  if (autoEl) {
+    autoEl.checked = localStorage.getItem("bpAutoRefresh") === "1";
+    setAuto(autoEl.checked);
+    autoEl.addEventListener("change", function () { setAuto(autoEl.checked); });
+  }
+})();
+</script>
+{% endblock %}

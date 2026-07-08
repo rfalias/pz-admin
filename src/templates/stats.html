@@ -5,6 +5,17 @@
 {% if not db_exists %}
 <p class="empty">No player database found at this path.</p>
 {% else %}
+<label class="auto-refresh-toggle">
+  <input type="checkbox" id="show-offline-toggle" onchange="applyOfflineFilter()" disabled>
+  Show offline
+</label>
+
+<div class="stats-table-wrap">
+<div class="stats-loading-overlay" id="stats-loading-overlay">
+  <span class="spinner"></span>
+  <span>Loading player status&hellip;</span>
+</div>
+<div class="table-scroll">
 <table class="stats-table">
   <thead>
     <tr>
@@ -14,6 +25,8 @@
       <th>Role</th>
       <th>Steam ID</th>
       <th>Last Connection</th>
+      <th>Access</th>
+      <th>Teleport</th>
       <th></th>
     </tr>
   </thead>
@@ -22,11 +35,28 @@
     {% set char = characters.get(u.username|lower) %}
     <tr data-username="{{ u.username|lower }}">
       <td><span class="status-dot offline-dot" data-online-dot></span></td>
-      <td>{{ u.username }}</td>
+      <td class="username-cell">{{ u.username }}</td>
       <td>{{ death_counts.get(u.username|lower, 0) }}</td>
-      <td>{{ u.role_name or "" }}</td>
+      <td class="role-cell">{{ u.role_name or "" }}</td>
       <td class="mono">{{ u.steamid or "" }}</td>
       <td>{{ u.lastConnection or "" }}</td>
+      <td>
+        <div class="row-actions">
+          <select class="access-select" data-username="{{ u.username }}">
+            {% for level in access_levels %}
+            <option value="{{ level }}" {% if u.role_name and u.role_name|lower == level %}selected{% endif %}>{{ level }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="access-set-btn" onclick="setAccessLevel(this)">Set</button>
+        </div>
+      </td>
+      <td>
+        <div class="row-actions">
+          <select class="teleport-select" data-username="{{ u.username }}" style="display:none;"></select>
+          <button type="button" class="teleport-btn" onclick="teleportToPlayer(this)" style="display:none;">Teleport to</button>
+        </div>
+        <span class="help teleport-empty">No players online</span>
+      </td>
       <td>
         {% if char %}
         <button type="button" class="char-toggle" onclick="toggleCharRow(this)">Character ▾</button>
@@ -36,7 +66,7 @@
     {% if char %}
     <tr class="char-row" style="display:none;">
       <td></td>
-      <td colspan="6">
+      <td colspan="8">
         <div class="char-panel">
           <p class="help">Character data is reverse-engineered from the save file's binary format and may be incomplete or wrong &mdash; treat as best-effort.</p>
           {% set c = char.character %}
@@ -66,6 +96,8 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
+</div>
 {% endif %}
 
 <script>
@@ -79,6 +111,61 @@
 </script>
 
 <script>
+  function updateTeleportOptions(row, onlinePlayers) {
+    var select = row.querySelector(".teleport-select");
+    var btn = row.querySelector(".teleport-btn");
+    var empty = row.querySelector(".teleport-empty");
+    if (!select) return;
+
+    var previousValue = select.value;
+    var others = onlinePlayers.filter(function (name) {
+      return name.toLowerCase() !== row.dataset.username;
+    });
+
+    select.innerHTML = "";
+    others.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    });
+    if (others.indexOf(previousValue) !== -1) select.value = previousValue;
+
+    var hasOthers = others.length > 0;
+    select.style.display = hasOthers ? "" : "none";
+    if (btn) btn.style.display = hasOthers ? "" : "none";
+    if (empty) empty.style.display = hasOthers ? "none" : "";
+  }
+
+  function applyOfflineFilter() {
+    var toggle = document.getElementById("show-offline-toggle");
+    var showOffline = !!(toggle && toggle.checked);
+    document.querySelectorAll("#stats-tbody > tr[data-username]").forEach(function (row) {
+      var dot = row.querySelector("[data-online-dot]");
+      var isOnline = !!(dot && dot.classList.contains("online-dot"));
+      var visible = showOffline || isOnline;
+      row.style.display = visible ? "" : "none";
+
+      var charRow = row.nextElementSibling;
+      if (charRow && charRow.classList.contains("char-row") && !visible) {
+        charRow.style.display = "none";
+        var toggleBtn = row.querySelector(".char-toggle");
+        if (toggleBtn) toggleBtn.textContent = "Character ▾";
+      }
+    });
+  }
+
+  var initialPlayerLoadDone = false;
+
+  function hideLoadingOverlay() {
+    if (initialPlayerLoadDone) return;
+    initialPlayerLoadDone = true;
+    var overlay = document.getElementById("stats-loading-overlay");
+    var toggle = document.getElementById("show-offline-toggle");
+    if (overlay) overlay.classList.add("hidden");
+    if (toggle) toggle.disabled = false;
+  }
+
   function refreshOnlinePlayers() {
     fetch("/stats/players")
       .then(function (resp) { return resp.ok ? resp.json() : null; })
@@ -89,16 +176,92 @@
         players.forEach(function (name) { onlineSet[name.toLowerCase()] = true; });
         document.querySelectorAll("#stats-tbody tr").forEach(function (row) {
           var dot = row.querySelector("[data-online-dot]");
-          if (!dot) return;
-          var isOnline = !!onlineSet[row.dataset.username];
-          dot.classList.toggle("online-dot", isOnline);
-          dot.classList.toggle("offline-dot", !isOnline);
-          dot.title = isOnline ? "online" : "offline";
+          if (dot) {
+            var isOnline = !!onlineSet[row.dataset.username];
+            dot.classList.toggle("online-dot", isOnline);
+            dot.classList.toggle("offline-dot", !isOnline);
+            dot.title = isOnline ? "online" : "offline";
+          }
+          updateTeleportOptions(row, players);
         });
-      });
+        applyOfflineFilter();
+      })
+      .finally(hideLoadingOverlay);
   }
 
   refreshOnlinePlayers();
   setInterval(refreshOnlinePlayers, 10000);
+  setTimeout(hideLoadingOverlay, 8000);
+</script>
+
+<script>
+  function quoteArg(value) {
+    return '"' + String(value).replace(/"/g, '\\"') + '"';
+  }
+
+  function setAccessLevel(btn) {
+    var row = btn.closest("tr");
+    var select = row.querySelector(".access-select");
+    var username = select.dataset.username;
+    var level = select.value;
+    var command = "setaccesslevel " + quoteArg(username) + " " + quoteArg(level);
+
+    if (!confirm('Run "' + command + '"? This changes the player\'s access level on the server.')) {
+      return;
+    }
+
+    btn.disabled = true;
+    fetch("/remote/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: command }),
+    })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert("Error setting access level: " + data.error);
+        } else {
+          var roleCell = row.querySelector(".role-cell");
+          if (roleCell) roleCell.textContent = level;
+        }
+      })
+      .catch(function (err) {
+        alert("Error setting access level: " + err);
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  }
+
+  function teleportToPlayer(btn) {
+    var row = btn.closest("tr");
+    var select = row.querySelector(".teleport-select");
+    var username = select.dataset.username;
+    var destination = select.value;
+    var command = "teleportplayer " + quoteArg(username) + " " + quoteArg(destination);
+
+    if (!confirm('Run "' + command + '"? This teleports ' + username + " to " + destination + ".")) {
+      return;
+    }
+
+    btn.disabled = true;
+    fetch("/remote/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: command }),
+    })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (data.error) {
+          alert("Error teleporting player: " + data.error);
+        }
+      })
+      .catch(function (err) {
+        alert("Error teleporting player: " + err);
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  }
 </script>
 {% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ data_path }}</p>
+
+{% if not leaderboard or not leaderboard.players %}
+<p class="empty">No battle pass data found at this path.</p>
+{% else %}
+
+<div class="bp-season-header">
+  <div>
+    <strong>{{ leaderboard.season_name }}</strong>
+    {% if leaderboard.season_description %}<p class="help">{{ leaderboard.season_description }}</p>{% endif %}
+    <p class="help">Refreshes every 10 minutes.</p>
+  </div>
+  <div class="bp-season-meta">
+    {% if exported_at_display %}<span class="help">Data last exported: {{ exported_at_display }}</span>{% endif %}
+    <button type="button" class="save-btn" onclick="location.reload()">Refresh</button>
+  </div>
+</div>
+
+{% if leaderboard.highlights %}
+<div class="bp-highlights">
+  {% for h in leaderboard.highlights %}
+  <div class="bp-highlight-card">
+    <div class="bp-highlight-label">{{ h.label }}</div>
+    <div class="bp-highlight-value">{{ h.value }}{% if h.unit %} {{ h.unit }}{% endif %}</div>
+    <div class="bp-highlight-player">{{ h.username }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="table-scroll">
+<table class="stats-table bp-leaderboard">
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Player</th>
+      <th>Points</th>
+      <th>Balance</th>
+      <th>Tiers</th>
+      <th>Feats</th>
+      <th>Quests</th>
+      <th>Deaths</th>
+      <th>Crafted</th>
+      <th>Top Skills</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in leaderboard.players %}
+    <tr>
+      <td class="{% if p.rank == 1 %}bp-rank-1{% elif p.rank == 2 %}bp-rank-2{% elif p.rank == 3 %}bp-rank-3{% endif %}">{{ p.rank }}</td>
+      <td class="wrap-cell">{{ p.username }}</td>
+      <td><strong>{{ p.lifetime_earned }}</strong></td>
+      <td>{{ p.balance }}</td>
+      <td>
+        {{ p.completed_tiers }}/{{ p.total_tiers }}
+        <div class="mini-bar"><div class="mini-bar-fill" style="width: {{ (p.completed_tiers / p.total_tiers * 100) if p.total_tiers else 0 }}%"></div></div>
+      </td>
+      <td>{{ p.completed_feats }}/{{ p.total_feats }}</td>
+      <td>{{ p.completed_quests }}/{{ p.total_quests }}</td>
+      <td>{{ p.deaths }}</td>
+      <td>{{ p.total_crafted }}</td>
+      <td class="wrap-cell">
+        {% for name, lvl in p.top_skills %}<span class="bp-skill-tag">{{ name }} {{ lvl }}</span>{% endfor %}
+        {% if not p.top_skills %}<span class="help">&mdash;</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

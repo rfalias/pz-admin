@@ -20,6 +20,7 @@
   <table class="stats-table" id="mods-table">
     <thead>
       <tr>
+        <th class="drag-handle-col"></th>
         <th>Mod ID</th>
         <th>Workshop ID</th>
         <th></th>
@@ -27,7 +28,8 @@
     </thead>
     <tbody id="mods-tbody">
       {% for mod_id, workshop_id in rows %}
-      <tr>
+      <tr draggable="true">
+        <td class="drag-handle" title="Drag to reorder">⠿</td>
         <td><input type="text" name="mod_id" value="{{ mod_id }}" placeholder="Base"></td>
         <td><input type="text" name="workshop_id" value="{{ workshop_id }}" placeholder="123456789"></td>
         <td><button type="button" class="row-remove-btn" onclick="this.closest('tr').remove()">Remove</button></td>
@@ -43,5 +45,5 @@
   </div>
 </form>
 
-<script src="/static/mods.js" defer></script>
+<script src="/static/mods.js?v={{ static_version }}" defer></script>
 {% endblock %}

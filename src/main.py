@@ -1,6 +1,9 @@
 import asyncio
 import os
+import shutil
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 from itertools import zip_longest
 from pathlib import Path
 
@@ -10,6 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+import battlepass_data
+import battlepass_logs
 import db_stats
 import death_tracker
 import docker_control
@@ -35,6 +40,8 @@ SANDBOX_LUA_PATH = CONFIG_DIR / "Server" / f"{SERVER_NAME}_SandboxVars.lua"
 PLAYER_DB_PATH = CONFIG_DIR / "db" / f"{SERVER_NAME}.db"
 SAVE_DB_PATH = CONFIG_DIR / "Saves" / "Multiplayer" / SERVER_NAME / "players.db"
 LOGS_DIR = CONFIG_DIR / "Logs"
+DEATH_LOG_PATH = CONFIG_DIR / "Lua" / "DeathTracker.log"
+BATTLEPASS_DATA_PATH = CONFIG_DIR / "Lua" / "BattlePassPlayerData.json"
 APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 DEATHS_DB_PATH = APP_DATA_DIR / "deaths.db"
 DEATH_SCAN_INTERVAL_SECONDS = int(os.environ.get("DEATH_SCAN_INTERVAL_SECONDS", "60"))
@@ -51,7 +58,7 @@ async def _death_scan_loop():
     (and its old copy is later cleaned up) between page visits."""
     while True:
         try:
-            await asyncio.to_thread(death_tracker.scan_logs, LOGS_DIR, DEATHS_DB_PATH)
+            await asyncio.to_thread(death_tracker.scan_logs, DEATH_LOG_PATH, DEATHS_DB_PATH)
         except Exception:
             pass
         await asyncio.sleep(DEATH_SCAN_INTERVAL_SECONDS)
@@ -70,10 +77,27 @@ app = FastAPI(title="PZ Admin", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+# Cache-busts static assets (css/js) on every deploy, since browsers otherwise
+# keep serving a stale cached copy after `docker compose up -d --build`.
+templates.env.globals["static_version"] = str(int(time.time()))
 
 
 def current_user(request: Request) -> str | None:
     return request.session.get("user")
+
+
+def combined_server_status() -> dict:
+    """Docker's "running" only means the process started - the PZ world can take
+    a while longer to load before RCON actually accepts connections. Downgrade
+    to "starting" until RCON responds, so the badge reflects the true state."""
+    status = docker_control.get_status()
+    if status.get("status") == "running":
+        try:
+            rcon_client.execute(RCON_HOST, RCON_PORT, RCON_PASSWORD, "players", timeout=2.0)
+        except Exception as exc:
+            status["status"] = "starting"
+            status["error"] = str(exc)
+    return status
 
 
 def pop_flash(request: Request) -> str | None:
@@ -135,9 +159,14 @@ def dashboard_raw(request: Request):
     except Exception as exc:
         players = []
         rcon_error = str(exc)
+
+    effective_status = status.get("status")
+    if effective_status == "running" and rcon_error:
+        effective_status = "starting"
+
     return JSONResponse(
         {
-            "status": status.get("status"),
+            "status": effective_status,
             "started_at": status.get("started_at"),
             "players": players,
             "rcon_error": rcon_error,
@@ -161,6 +190,7 @@ def server_page(request: Request):
             "container": PZ_CONTAINER_NAME,
             "flash": pop_flash(request),
             "config_path": str(SERVER_INI_PATH),
+            "server_name": SERVER_NAME,
             "mods_warning": ini_config.validate_mods(entries),
         },
     )
@@ -229,6 +259,7 @@ async def mods_save(request: Request):
             "Mods": ";".join(m for m, _ in pairs),
             "WorkshopItems": ";".join(w for _, w in pairs),
         },
+        managed_keys={"Mods", "WorkshopItems"},
     )
     ini_config.write_ini(SERVER_INI_PATH, entries)
     flash = "Mods saved. Restart the server to apply changes."
@@ -303,6 +334,7 @@ def logs_page(request: Request, lines: int = DEFAULT_LOG_LINES, categories: list
         "logs.html",
         {
             "active": "logs",
+            "subtab": "server",
             "user": user,
             "container": PZ_CONTAINER_NAME,
             "flash": pop_flash(request),
@@ -325,6 +357,79 @@ def logs_raw(request: Request, lines: int = DEFAULT_LOG_LINES, categories: list[
     return JSONResponse(entries)
 
 
+@app.get("/battlepass", response_class=HTMLResponse)
+def battlepass_page(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    raw_data = battlepass_data.load_battlepass_data(BATTLEPASS_DATA_PATH)
+    leaderboard = battlepass_data.build_leaderboard(raw_data) if raw_data else None
+    exported_at = leaderboard["exported_at"] if leaderboard else None
+    return templates.TemplateResponse(
+        request,
+        "battlepass.html",
+        {
+            "active": "battlepass",
+            "user": user,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "data_path": str(BATTLEPASS_DATA_PATH),
+            "leaderboard": leaderboard,
+            "exported_at_display": (
+                datetime.fromtimestamp(exported_at).strftime("%Y-%m-%d %H:%M:%S") if exported_at else None
+            ),
+        },
+    )
+
+
+@app.get("/logs/battlepass", response_class=HTMLResponse)
+def battlepass_logs_page(
+    request: Request,
+    lines: int = 200,
+    file: str | None = None,
+    player: str | None = None,
+):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    lines = max(10, min(lines, 2000))
+    entries, file_names = battlepass_logs.read_battlepass_logs(
+        LOGS_DIR, lines, file_name=file, player_filter=player or None
+    )
+    return templates.TemplateResponse(
+        request,
+        "logs_battlepass.html",
+        {
+            "active": "logs",
+            "subtab": "battlepass",
+            "user": user,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "lines": lines,
+            "entries": entries,
+            "file_names": file_names,
+            "selected_file": file or (file_names[0] if file_names else ""),
+            "player_filter": player or "",
+        },
+    )
+
+
+@app.get("/logs/battlepass/raw")
+def battlepass_logs_raw(
+    request: Request,
+    lines: int = 200,
+    file: str | None = None,
+    player: str | None = None,
+):
+    if not current_user(request):
+        return JSONResponse([], status_code=401)
+    lines = max(10, min(lines, 2000))
+    entries, _ = battlepass_logs.read_battlepass_logs(
+        LOGS_DIR, lines, file_name=file, player_filter=player or None
+    )
+    return JSONResponse(entries)
+
+
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request):
     user = current_user(request)
@@ -332,7 +437,7 @@ def stats_page(request: Request):
         return RedirectResponse("/login", status_code=303)
     users = db_stats.list_users(PLAYER_DB_PATH)
     characters = db_stats.list_characters(SAVE_DB_PATH)
-    death_tracker.scan_logs(LOGS_DIR, DEATHS_DB_PATH)
+    death_tracker.scan_logs(DEATH_LOG_PATH, DEATHS_DB_PATH)
     death_counts = death_tracker.get_death_counts(DEATHS_DB_PATH)
     return templates.TemplateResponse(
         request,
@@ -347,6 +452,7 @@ def stats_page(request: Request):
             "users": users,
             "characters": characters,
             "death_counts": death_counts,
+            "access_levels": rcon_commands.ACCESS_LEVELS,
         },
     )
 
@@ -364,7 +470,7 @@ def stats_players(request: Request):
 
 @app.get("/status/raw")
 def status_raw(request: Request):
-    return JSONResponse(docker_control.get_status())
+    return JSONResponse(combined_server_status())
 
 
 @app.post("/rcon/save")
@@ -412,6 +518,54 @@ async def remote_run(request: Request):
         return JSONResponse({"response": response, "error": None})
     except Exception as exc:
         return JSONResponse({"response": None, "error": str(exc)})
+
+
+@app.post("/wipe")
+async def wipe_server(request: Request):
+    if not current_user(request):
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    body = await request.json()
+    wipe_world = bool(body.get("wipe_world", True))
+    wipe_players = bool(body.get("wipe_players", False))
+
+    steps: list[str] = []
+
+    try:
+        await asyncio.to_thread(docker_control.stop_container)
+        steps.append("Server stopped.")
+    except Exception as exc:
+        return JSONResponse({"error": f"Failed to stop server: {exc}"})
+
+    if wipe_world:
+        save_dir = CONFIG_DIR / "Saves" / "Multiplayer" / SERVER_NAME
+        try:
+            if save_dir.exists():
+                shutil.rmtree(save_dir)
+            steps.append("World data deleted.")
+        except Exception as exc:
+            steps.append(f"Warning: could not delete world data: {exc}")
+        try:
+            if DEATHS_DB_PATH.exists():
+                DEATHS_DB_PATH.unlink()
+            steps.append("Death records cleared.")
+        except Exception as exc:
+            steps.append(f"Warning: could not clear death records: {exc}")
+
+    if wipe_players:
+        try:
+            if PLAYER_DB_PATH.exists():
+                PLAYER_DB_PATH.unlink()
+            steps.append("Player database deleted.")
+        except Exception as exc:
+            steps.append(f"Warning: could not delete player database: {exc}")
+
+    try:
+        await asyncio.to_thread(docker_control.start_container)
+        steps.append("Server started.")
+    except Exception as exc:
+        steps.append(f"Warning: could not start server: {exc}")
+
+    return JSONResponse({"message": " ".join(steps), "error": None})
 
 
 @app.post("/restart")

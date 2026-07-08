@@ -20,15 +20,15 @@ left blank - PZ commands generally treat a missing optional arg as "use the
 issuer" or "use the default", not an empty string.
 """
 
-ACCESS_LEVELS = ["Admin", "Moderator", "Overseer", "GM", "Observer", "none"]
+ACCESS_LEVELS = ["admin", "moderator", "overseer", "gm", "observer", "user"]
 LOG_TYPES = [
-    "General", "Network", "Multiplayer", "Voice", "Packet", "NetworkFileDebug",
-    "Lua", "Mod", "Sound", "Zombie", "Combat", "Objects", "Fireplace", "Radio",
-    "MapLoading", "Clothing", "Animation", "Asset", "Script", "Shader", "Input",
-    "Recipe", "ActionSystem", "IsoRegion", "UniTests", "FileIO", "Ownership",
-    "Death", "Damage", "Statistic", "Vehicle", "Checksum",
+    "general", "network", "multiplayer", "voice", "packet", "networkfiledebug",
+    "lua", "mod", "sound", "zombie", "combat", "objects", "fireplace", "radio",
+    "maploading", "clothing", "animation", "asset", "script", "shader", "input",
+    "recipe", "actionsystem", "isoregion", "unitests", "fileio", "ownership",
+    "death", "damage", "statistic", "vehicle", "checksum",
 ]
-LOG_LEVELS = ["Trace", "Debug", "General", "Warning", "Error"]
+LOG_LEVELS = ["trace", "debug", "general", "warning", "error"]
 
 COMMANDS = [
     {

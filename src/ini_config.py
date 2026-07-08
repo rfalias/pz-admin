@@ -85,9 +85,20 @@ def write_ini(path: Path, entries: list[dict]) -> None:
     path.write_text("\n".join(lines).rstrip("\n") + "\n")
 
 
-def apply_form(entries: list[dict], form: dict) -> None:
+def apply_form(entries: list[dict], form: dict, managed_keys: set[str] | None = None) -> None:
+    """Apply submitted form values onto entries.
+
+    `managed_keys` restricts which entries this form submission is allowed to
+    touch. Checkboxes only POST when checked, so an absent boolean key is
+    normally treated as "unchecked" - but that's only safe for entries the
+    form actually has a field for. Without `managed_keys`, a partial form
+    (e.g. the Mods page submitting just Mods/WorkshopItems) would silently
+    flip every other boolean setting in the ini to false.
+    """
     for entry in entries:
         key = entry["key"]
+        if managed_keys is not None and key not in managed_keys:
+            continue
         if entry["is_bool"]:
             entry["value"] = "true" if key in form else "false"
         elif key in form:

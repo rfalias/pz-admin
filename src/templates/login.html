@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login - PZ Admin</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
 </head>
 <body class="login-body">
   <form method="post" action="/login" class="login-form">
@@ -23,6 +23,6 @@
     </label>
     <button type="submit">Log in</button>
   </form>
-  <script src="/static/status.js" defer></script>
+  <script src="/static/status.js?v={{ static_version }}" defer></script>
 </body>
 </html>

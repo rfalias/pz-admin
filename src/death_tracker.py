@@ -1,12 +1,7 @@
-import re
+import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
-
-DIED_RE = re.compile(
-    r"^\[(?P<ts>\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\] "
-    r"user (?P<username>\S+) died at \((?P<x>-?\d+),(?P<y>-?\d+),(?P<z>-?\d+)\) "
-    r"\((?P<pvp>[^)]+)\)\."
-)
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
@@ -29,75 +24,67 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def _parse_timestamp(ts: str) -> str:
-    """PZ logs use DD-MM-YY HH:MM:SS.mmm. Return an ISO-ish string, assuming 2000s."""
-    day, month, year = ts[0:2], ts[3:5], ts[6:8]
-    rest = ts[9:]
-    return f"20{year}-{month}-{day} {rest}"
+def scan_logs(death_log_path: Path, db_path: Path) -> int:
+    """Read new lines appended to DeathTracker.log and persist deaths.
+    Tracks a byte offset so it never re-reads already-processed data.
+    Returns the number of new deaths found."""
+    if not death_log_path.exists():
+        return 0
 
-
-def _iter_user_log_files(logs_dir: Path):
-    if not logs_dir.exists():
-        return []
-    return sorted(logs_dir.rglob("*_user.txt"))
-
-
-def scan_logs(logs_dir: Path, db_path: Path) -> int:
-    """Parse any new lines appended to *_user.txt log files since the last
-    scan and record new death events. Returns the number of new deaths found.
-    Safe to call frequently - tracks a byte offset per file so it never
-    re-reads already-processed data."""
     conn = _connect(db_path)
     new_deaths = 0
+    key = str(death_log_path)
     try:
-        for path in _iter_user_log_files(logs_dir):
-            key = str(path)
-            row = conn.execute(
-                "SELECT bytes_read FROM log_progress WHERE filename = ?", (key,)
-            ).fetchone()
-            offset = row[0] if row else 0
+        row = conn.execute(
+            "SELECT bytes_read FROM log_progress WHERE filename = ?", (key,)
+        ).fetchone()
+        offset = row[0] if row else 0
 
-            with path.open("rb") as f:
-                f.seek(offset)
-                chunk = f.read()
+        with death_log_path.open("rb") as f:
+            f.seek(offset)
+            chunk = f.read()
 
-            if not chunk:
+        if not chunk:
+            return 0
+
+        last_newline = chunk.rfind(b"\n")
+        if last_newline == -1:
+            return 0  # incomplete line, wait for more data
+
+        usable = chunk[: last_newline + 1]
+
+        for raw_line in usable.decode("utf-8", errors="replace").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
                 continue
 
-            last_newline = chunk.rfind(b"\n")
-            if last_newline == -1:
-                continue  # no complete line yet, wait for more data
+            username = entry.get("username")
+            ts = entry.get("timestamp")
+            if not username or ts is None:
+                continue
 
-            usable = chunk[:last_newline + 1]
-            text = usable.decode("utf-8", errors="replace")
-
-            for line in text.splitlines():
-                m = DIED_RE.match(line.strip())
-                if not m:
-                    continue
-                cur = conn.execute(
-                    "INSERT OR IGNORE INTO deaths "
-                    "(username, x, y, z, pvp, occurred_at, source_file) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        m.group("username"),
-                        int(m.group("x")),
-                        int(m.group("y")),
-                        int(m.group("z")),
-                        m.group("pvp"),
-                        _parse_timestamp(m.group("ts")),
-                        key,
-                    ),
-                )
-                if cur.rowcount:
-                    new_deaths += 1
-
-            conn.execute(
-                "INSERT INTO log_progress (filename, bytes_read) VALUES (?, ?) "
-                "ON CONFLICT(filename) DO UPDATE SET bytes_read = excluded.bytes_read",
-                (key, offset + len(usable)),
+            occurred_at = datetime.fromtimestamp(ts, tz=timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S.000"
             )
-            conn.commit()
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO deaths "
+                "(username, x, y, z, pvp, occurred_at, source_file) "
+                "VALUES (?, ?, ?, ?, NULL, ?, ?)",
+                (username, entry.get("x"), entry.get("y"), entry.get("z"), occurred_at, key),
+            )
+            if cur.rowcount:
+                new_deaths += 1
+
+        conn.execute(
+            "INSERT INTO log_progress (filename, bytes_read) VALUES (?, ?) "
+            "ON CONFLICT(filename) DO UPDATE SET bytes_read = excluded.bytes_read",
+            (key, offset + len(usable)),
+        )
+        conn.commit()
     finally:
         conn.close()
     return new_deaths
@@ -118,8 +105,7 @@ def get_death_counts(db_path: Path) -> dict:
 
 
 def get_death_leaderboard(db_path: Path) -> list[dict]:
-    """Return [{username, count}], sorted by most deaths first, preserving
-    the display casing of the username (unlike get_death_counts)."""
+    """Return [{username, count}] sorted by most deaths first."""
     if not db_path.exists():
         return []
     conn = sqlite3.connect(db_path)

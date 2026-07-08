@@ -5,6 +5,18 @@ import docker
 PZ_CONTAINER_NAME = os.environ.get("PZ_CONTAINER_NAME", "projectzomboid")
 
 
+def stop_container() -> None:
+    client = docker.from_env()
+    container = client.containers.get(PZ_CONTAINER_NAME)
+    container.stop(timeout=30)
+
+
+def start_container() -> None:
+    client = docker.from_env()
+    container = client.containers.get(PZ_CONTAINER_NAME)
+    container.start()
+
+
 def restart_pz_container() -> str:
     client = docker.from_env()
     container = client.containers.get(PZ_CONTAINER_NAME)

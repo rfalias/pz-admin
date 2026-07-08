@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ server_name }} - Server Status</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
 </head>
 <body>
   <header>
@@ -83,11 +83,15 @@
         .then(function (resp) { return resp.ok ? resp.json() : null; })
         .then(function (data) {
           if (!data) return;
-          badge.classList.remove("status-running", "status-stopped", "status-unknown");
+          badge.classList.remove("status-running", "status-starting", "status-stopped", "status-unknown");
           if (data.status === "running") {
             badge.classList.add("status-running");
             var uptime = relativeTime(data.started_at);
             text.textContent = "online" + (uptime ? " (" + uptime + ")" : "");
+          } else if (data.status === "starting") {
+            badge.classList.add("status-starting");
+            var startingUptime = relativeTime(data.started_at);
+            text.textContent = "starting up" + (startingUptime ? " (" + startingUptime + ")" : "");
           } else {
             badge.classList.add("status-stopped");
             text.textContent = "offline";
@@ -114,7 +118,7 @@
           }
         })
         .catch(function () {
-          badge.classList.remove("status-running");
+          badge.classList.remove("status-running", "status-starting");
           badge.classList.add("status-unknown");
           text.textContent = "unreachable";
         });

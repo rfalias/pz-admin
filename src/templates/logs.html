@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% include "_logs_subnav.html" %}
 <p class="config-path">{{ config_path }}</p>
 
 <form method="get" action="/logs" class="logs-controls" id="logs-form">
