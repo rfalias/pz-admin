@@ -15,10 +15,11 @@
         <span class="status-dot"></span>
         <span class="status-text">checking...</span>
       </span>
+      <a href="/login" class="dashboard-login-btn">Login</a>
     </div>
   </header>
 
-  <main>
+  <main class="main-wide">
     {% if description %}<p class="help">{{ description }}</p>{% endif %}
 
     <div class="group">
@@ -41,19 +42,67 @@
     </div>
 
     <div class="group">
-      <div class="group-summary-static">Deaths</div>
+      <div class="group-summary-static">
+        Battle Pass Leaderboard{% if leaderboard and leaderboard.season_name %} &mdash; {{ leaderboard.season_name }}{% endif %}
+      </div>
       <div class="group-body">
-        {% if deaths %}
-        <table class="stats-table">
-          <thead><tr><th>Username</th><th>Deaths</th></tr></thead>
+        {% if not leaderboard or not leaderboard.players %}
+        <p class="empty">No battle pass data available yet.</p>
+        {% else %}
+        <p class="help">Refreshes every 10 minutes. <span id="bp-exported-at" data-epoch="{{ leaderboard.exported_at or '' }}"></span></p>
+
+        {% if leaderboard.highlights %}
+        <div class="bp-highlights">
+          {% for h in leaderboard.highlights %}
+          <div class="bp-highlight-card">
+            <div class="bp-highlight-label">{{ h.label }}</div>
+            <div class="bp-highlight-value">{{ h.value }}{% if h.unit %} {{ h.unit }}{% endif %}</div>
+            <div class="bp-highlight-player">{{ h.username }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="table-scroll">
+        <table class="stats-table bp-leaderboard">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Points</th>
+              <th>Balance</th>
+              <th>Tiers</th>
+              <th>Feats</th>
+              <th>Quests</th>
+              <th>Deaths</th>
+              <th>Crafted</th>
+              <th>Top Skills</th>
+            </tr>
+          </thead>
           <tbody>
-            {% for d in deaths %}
-            <tr><td>{{ d.username }}</td><td>{{ d.count }}</td></tr>
+            {% for p in leaderboard.players %}
+            <tr>
+              <td class="{% if p.rank == 1 %}bp-rank-1{% elif p.rank == 2 %}bp-rank-2{% elif p.rank == 3 %}bp-rank-3{% endif %}">{{ p.rank }}</td>
+              <td class="wrap-cell">{{ p.username }}</td>
+              <td><strong>{{ p.lifetime_earned }}</strong></td>
+              <td>{{ p.balance }}</td>
+              <td>
+                {{ p.completed_tiers }}/{{ p.total_tiers }}
+                <div class="mini-bar"><div class="mini-bar-fill" style="width: {{ (p.completed_tiers / p.total_tiers * 100) if p.total_tiers else 0 }}%"></div></div>
+              </td>
+              <td>{{ p.completed_feats }}/{{ p.total_feats }}</td>
+              <td>{{ p.completed_quests }}/{{ p.total_quests }}</td>
+              <td>{{ p.deaths }}</td>
+              <td>{{ p.total_crafted }}</td>
+              <td class="wrap-cell">
+                {% for name, lvl in p.top_skills %}<span class="bp-skill-tag">{{ name }} {{ lvl }}</span>{% endfor %}
+                {% if not p.top_skills %}<span class="help">&mdash;</span>{% endif %}
+              </td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
-        {% else %}
-        <p class="empty">No deaths recorded yet.</p>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -126,6 +175,14 @@
 
     refreshDashboard();
     setInterval(refreshDashboard, 15000);
+
+    (function () {
+      var el = document.getElementById("bp-exported-at");
+      if (!el) return;
+      var epoch = parseFloat(el.dataset.epoch);
+      if (!epoch) return;
+      el.textContent = "Data last exported: " + new Date(epoch * 1000).toLocaleString();
+    })();
   </script>
 </body>
 </html>

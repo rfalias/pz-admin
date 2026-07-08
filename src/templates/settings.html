@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="group">
+  <div class="group-summary-static">Add user</div>
+  <div class="group-body">
+    <form method="post" action="/settings/users" class="settings-add-form">
+      <div class="field">
+        <label for="new-username">Username</label>
+        <input type="text" id="new-username" name="username" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="new-password">Password</label>
+        <input type="password" id="new-password" name="password" required autocomplete="new-password">
+      </div>
+      <label class="settings-checkbox-label">
+        <input type="checkbox" name="is_superuser" checked>
+        Admin (can manage users)
+      </label>
+      <button type="submit" class="save-btn">Add user</button>
+    </form>
+  </div>
+</div>
+
+<div class="table-scroll">
+<table class="stats-table settings-table">
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th>Reset password</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td class="wrap-cell">
+        {{ u.username }}{% if u.id|string == current_user_id %} <span class="help">(you)</span>{% endif %}
+      </td>
+      <td>
+        <span class="settings-badge {{ 'settings-badge-admin' if u.is_superuser else '' }}">
+          {{ "Admin" if u.is_superuser else "User" }}
+        </span>
+        {% if u.id|string != current_user_id %}
+        <form method="post" action="/settings/users/{{ u.id }}/toggle-superuser" class="settings-inline-form">
+          <button type="submit" class="settings-btn">{{ "Remove admin" if u.is_superuser else "Make admin" }}</button>
+        </form>
+        {% endif %}
+      </td>
+      <td>
+        <span class="settings-badge {{ 'settings-badge-active' if u.is_active else 'settings-badge-disabled' }}">
+          {{ "Active" if u.is_active else "Disabled" }}
+        </span>
+        {% if u.id|string != current_user_id %}
+          {% if u.is_active %}
+          <form method="post" action="/settings/users/{{ u.id }}/toggle-active" class="settings-inline-form"
+                onsubmit="return confirm('Disable {{ u.username }}?');">
+            <button type="submit" class="settings-btn">Disable</button>
+          </form>
+          {% else %}
+          <form method="post" action="/settings/users/{{ u.id }}/toggle-active" class="settings-inline-form">
+            <button type="submit" class="settings-btn">Enable</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/settings/users/{{ u.id }}/password" class="settings-inline-form settings-password-form">
+          <input type="password" name="password" placeholder="new password" required autocomplete="new-password">
+          <button type="submit" class="settings-btn">Set</button>
+        </form>
+      </td>
+      <td>
+        {% if u.id|string != current_user_id %}
+        <form method="post" action="/settings/users/{{ u.id }}/delete" class="settings-inline-form"
+              onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.');">
+          <button type="submit" class="settings-btn settings-btn-danger">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

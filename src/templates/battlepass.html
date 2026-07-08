@@ -13,7 +13,7 @@
     <p class="help">Refreshes every 10 minutes.</p>
   </div>
   <div class="bp-season-meta">
-    {% if exported_at_display %}<span class="help">Data last exported: {{ exported_at_display }}</span>{% endif %}
+    <span class="help" id="bp-exported-at" data-epoch="{{ leaderboard.exported_at or '' }}"></span>
     <button type="button" class="save-btn" onclick="location.reload()">Refresh</button>
   </div>
 </div>
@@ -71,4 +71,14 @@
 </table>
 </div>
 {% endif %}
+
+<script>
+  (function () {
+    var el = document.getElementById("bp-exported-at");
+    if (!el) return;
+    var epoch = parseFloat(el.dataset.epoch);
+    if (!epoch) return;
+    el.textContent = "Data last exported: " + new Date(epoch * 1000).toLocaleString();
+  })();
+</script>
 {% endblock %}
