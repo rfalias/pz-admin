@@ -1,7 +1,19 @@
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 import character_blob
+
+
+def _last_connection_epoch(value: str | None) -> float | None:
+    """PZ stores lastConnection as a naive UTC timestamp string; convert it to
+    a Unix epoch so the client can render it in the viewer's local timezone."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
 
 
 def list_users(db_path: Path) -> list[dict]:
@@ -21,7 +33,10 @@ def list_users(db_path: Path) -> list[dict]:
             ORDER BY w.lastConnection DESC NULLS LAST, w.username COLLATE NOCASE
             """
         ).fetchall()
-        return [dict(row) for row in rows]
+        users = [dict(row) for row in rows]
+        for u in users:
+            u["lastConnectionEpoch"] = _last_connection_epoch(u["lastConnection"])
+        return users
     finally:
         conn.close()
 

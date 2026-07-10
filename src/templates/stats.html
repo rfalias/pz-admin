@@ -39,7 +39,7 @@
       <td>{{ death_counts.get(u.username|lower, 0) }}</td>
       <td class="role-cell">{{ u.role_name or "" }}</td>
       <td class="mono">{{ u.steamid or "" }}</td>
-      <td>{{ u.lastConnection or "" }}</td>
+      <td class="local-time" data-epoch="{{ u.lastConnectionEpoch or '' }}">{{ u.lastConnection or "" }}</td>
       <td>
         <div class="row-actions">
           <select class="access-select" data-username="{{ u.username }}">
@@ -101,6 +101,12 @@
 {% endif %}
 
 <script>
+  document.querySelectorAll("td.local-time[data-epoch]").forEach(function (el) {
+    var epoch = parseFloat(el.dataset.epoch);
+    if (!epoch) return;
+    el.textContent = new Date(epoch * 1000).toLocaleString();
+  });
+
   function toggleCharRow(btn) {
     var row = btn.closest("tr").nextElementSibling;
     if (!row) return;
