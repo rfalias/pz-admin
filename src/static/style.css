@@ -850,6 +850,19 @@ main.main-wide {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.5rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.danger-zone-subheader {
+  font-weight: 400;
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0.9;
 }
 
 .danger-zone-body {

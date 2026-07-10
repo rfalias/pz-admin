@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import shutil
 import time
@@ -64,6 +65,7 @@ DEATH_LOG_PATH = CONFIG_DIR / "Lua" / "DeathTracker.log"
 BATTLEPASS_DATA_PATH = CONFIG_DIR / "Lua" / "BattlePassPlayerData.json"
 APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 DEATHS_DB_PATH = APP_DATA_DIR / "deaths.db"
+LAST_WIPE_PATH = APP_DATA_DIR / "last_wipe.json"
 DEATH_SCAN_INTERVAL_SECONDS = int(os.environ.get("DEATH_SCAN_INTERVAL_SECONDS", "60"))
 USERS_FILE = Path(os.environ.get("USERS_FILE", "/app/users.json"))
 
@@ -233,6 +235,7 @@ def server_page(request: Request, user: User | None = Depends(current_user_optio
             "config_path": str(SERVER_INI_PATH),
             "server_name": SERVER_NAME,
             "mods_warning": ini_config.validate_mods(entries),
+            "last_wipe": _read_last_wipe(),
         },
     )
 
@@ -556,6 +559,22 @@ async def remote_run(request: Request, user: User | None = Depends(current_user_
         return JSONResponse({"response": None, "error": str(exc)})
 
 
+def _read_last_wipe() -> dict | None:
+    if not LAST_WIPE_PATH.exists():
+        return None
+    try:
+        return json.loads(LAST_WIPE_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _write_last_wipe(wipe_world: bool, wipe_players: bool) -> None:
+    LAST_WIPE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LAST_WIPE_PATH.write_text(
+        json.dumps({"epoch": time.time(), "wipe_world": wipe_world, "wipe_players": wipe_players})
+    )
+
+
 @app.post("/wipe")
 async def wipe_server(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
@@ -594,6 +613,8 @@ async def wipe_server(request: Request, user: User | None = Depends(current_user
             steps.append("Player database deleted.")
         except Exception as exc:
             steps.append(f"Warning: could not delete player database: {exc}")
+
+    _write_last_wipe(wipe_world, wipe_players)
 
     try:
         await asyncio.to_thread(docker_control.start_container)

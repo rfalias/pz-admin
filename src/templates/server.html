@@ -31,7 +31,18 @@
 {% endif %}
 
 <div class="danger-zone">
-  <div class="danger-zone-header">Danger Zone</div>
+  <div class="danger-zone-header">
+    Danger Zone
+    <span class="danger-zone-subheader">
+      Last wiped:
+      {% if last_wipe %}
+      <span class="local-time" data-epoch="{{ last_wipe.epoch }}">{{ last_wipe.epoch }}</span>
+      ({{ "world" if last_wipe.wipe_world else "" }}{% if last_wipe.wipe_world and last_wipe.wipe_players %} + {% endif %}{{ "players" if last_wipe.wipe_players else "" }})
+      {% else %}
+      never
+      {% endif %}
+    </span>
+  </div>
   <div class="danger-zone-body">
     <div class="danger-zone-row">
       <div>
@@ -78,6 +89,12 @@
 </div>
 
 <script>
+document.querySelectorAll(".local-time[data-epoch]").forEach(function (el) {
+  var epoch = parseFloat(el.dataset.epoch);
+  if (!epoch) return;
+  el.textContent = new Date(epoch * 1000).toLocaleString();
+});
+
 (function () {
   var openBtn = document.getElementById("wipe-open-btn");
   var modal = document.getElementById("wipe-modal");
