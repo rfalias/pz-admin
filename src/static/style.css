@@ -1141,6 +1141,13 @@ main.main-wide {
   border-radius: 6px;
   padding: 0.3rem 0.6rem;
   font-size: 0.85rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.mod-tag:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .wipe-result-error {

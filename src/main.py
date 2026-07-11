@@ -197,18 +197,21 @@ def _load_battlepass_leaderboard() -> dict | None:
     return battlepass_data.build_leaderboard(raw_data) if raw_data else None
 
 
-def _load_installed_mods(entries: list) -> list[str]:
-    """Friendly names of installed mods: cached Workshop title if known,
-    else the raw mod ID/workshop ID as a fallback."""
+def _load_installed_mods(entries: list) -> list[dict]:
+    """Friendly names of installed mods, linked to their Workshop page when
+    a workshop ID is known. Falls back to the raw mod ID as the name when
+    there's no cached title (or no workshop ID at all)."""
     mod_ids = ini_config.split_list(ini_config.get_value(entries, "Mods"))
     workshop_ids = ini_config.split_list(ini_config.get_value(entries, "WorkshopItems"))
     titles = mod_titles.get_titles(MOD_TITLES_CACHE_PATH)
-    names = []
+    mods = []
     for mod_id, workshop_id in zip_longest(mod_ids, workshop_ids, fillvalue=""):
         if not mod_id and not workshop_id:
             continue
-        names.append(titles.get(workshop_id) or mod_id or f"Workshop ID {workshop_id}")
-    return names
+        name = titles.get(workshop_id) or mod_id or f"Workshop ID {workshop_id}"
+        url = f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}" if workshop_id else None
+        mods.append({"name": name, "url": url})
+    return mods
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

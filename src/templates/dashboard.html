@@ -48,7 +48,13 @@
         <p class="empty">No mods configured.</p>
         {% else %}
         <div class="mod-tag-list">
-          {% for name in mods %}<span class="mod-tag">{{ name }}</span>{% endfor %}
+          {% for mod in mods %}
+          {% if mod.url %}
+          <a class="mod-tag" href="{{ mod.url }}" target="_blank" rel="noopener noreferrer">{{ mod.name }}</a>
+          {% else %}
+          <span class="mod-tag">{{ mod.name }}</span>
+          {% endif %}
+          {% endfor %}
         </div>
         {% endif %}
       </div>
