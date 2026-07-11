@@ -858,7 +858,7 @@ async def restart_server(request: Request, user: User | None = Depends(current_u
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
     try:
-        status = docker_control.restart_pz_container()
+        status = await asyncio.to_thread(docker_control.restart_pz_container)
         request.session["flash"] = f"Restart signal sent to '{PZ_CONTAINER_NAME}' (status: {status})."
         await _audit(request, "restart", user.username)
     except Exception as exc:
