@@ -27,6 +27,7 @@ import log_tables
 import lua_config
 import mod_parser
 import mod_titles
+import player_shops
 import rcon_client
 import rcon_commands
 from auth_db import (
@@ -67,6 +68,7 @@ LOGS_DIR = CONFIG_DIR / "Logs"
 DEATH_LOG_PATH = CONFIG_DIR / "Lua" / "DeathTracker.log"
 BATTLEPASS_DATA_PATH = CONFIG_DIR / "Lua" / "BattlePassPlayerData.json"
 SPAWNPOINTS_PATH = CONFIG_DIR / "Lua" / f"DynamicSpawnPoints_{SERVER_NAME}_EventSpawns.txt"
+PLAYERSHOPS_LOG_PATH = CONFIG_DIR / "Lua" / "PlayerShopsTransactions.log"
 APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 DEATHS_DB_PATH = APP_DATA_DIR / "deaths.db"
 LAST_WIPE_PATH = APP_DATA_DIR / "last_wipe.json"
@@ -503,6 +505,54 @@ async def spawnpoints_save(request: Request, user: User | None = Depends(current
         flash += f" Skipped {skipped} row(s) with invalid X/Y coordinates."
     request.session["flash"] = flash
     return RedirectResponse("/spawnpoints", status_code=303)
+
+
+def _selected_shop_types(types: list[str] | None) -> list[str]:
+    return [t for t in (types or []) if t in player_shops.TYPES]
+
+
+@app.get("/playershops", response_class=HTMLResponse)
+def playershops_page(
+    request: Request,
+    lines: int = DEFAULT_LOG_LINES,
+    types: list[str] | None = Query(None),
+    user: User | None = Depends(current_user_optional),
+):
+    if not user:
+        return RedirectResponse("/dashboard", status_code=303)
+    lines = max(10, min(lines, MAX_LOG_LINES))
+    selected = _selected_shop_types(types)
+    entries = player_shops.read_transactions(PLAYERSHOPS_LOG_PATH, lines, selected)
+    return templates.TemplateResponse(
+        request,
+        "playershops.html",
+        {
+            "active": "playershops",
+            "user": user.username,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "config_path": str(PLAYERSHOPS_LOG_PATH),
+            "lines": lines,
+            "all_types": player_shops.TYPES,
+            "selected_types": selected,
+            "entries": entries,
+        },
+    )
+
+
+@app.get("/playershops/raw")
+def playershops_raw(
+    request: Request,
+    lines: int = DEFAULT_LOG_LINES,
+    types: list[str] | None = Query(None),
+    user: User | None = Depends(current_user_optional),
+):
+    if not user:
+        return JSONResponse([], status_code=401)
+    lines = max(10, min(lines, MAX_LOG_LINES))
+    selected = _selected_shop_types(types)
+    entries = player_shops.read_transactions(PLAYERSHOPS_LOG_PATH, lines, selected)
+    return JSONResponse(entries)
 
 
 def _selected_log_categories(categories: list[str] | None) -> list[str]:

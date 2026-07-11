@@ -18,6 +18,7 @@
       <a href="/logs" class="{{ 'active' if active == 'logs' else '' }}">Logs</a>
       <a href="/battlepass" class="{{ 'active' if active == 'battlepass' else '' }}">Battle Pass</a>
       <a href="/stats" class="{{ 'active' if active == 'stats' else '' }}">Players</a>
+      <a href="/playershops" class="{{ 'active' if active == 'playershops' else '' }}">Player Shops</a>
       <a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>
       <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">Settings</a>
       <a href="/audit" class="{{ 'active' if active == 'audit' else '' }}">Audit Log</a>
@@ -43,7 +44,7 @@
   <div class="flash">{{ flash }}</div>
   {% endif %}
 
-  <main class="{{ 'main-wide' if active in ['stats', 'battlepass', 'audit'] else '' }}">
+  <main class="{{ 'main-wide' if active in ['stats', 'battlepass', 'audit', 'playershops'] else '' }}">
     {% block content %}{% endblock %}
   </main>
 

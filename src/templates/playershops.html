@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+
+<form method="get" action="/playershops" class="logs-controls" id="playershops-form">
+  <div class="logs-controls-form">
+    <label for="lines">Rows</label>
+    <input type="number" id="lines" name="lines" value="{{ lines }}" min="10" max="2000" step="10">
+    <button type="submit" class="save-btn">Refresh</button>
+  </div>
+  <label class="auto-refresh-toggle">
+    <input type="checkbox" id="auto-refresh">
+    Auto-refresh (5s)
+  </label>
+</form>
+
+<div class="category-filters">
+  {% for key, label in all_types.items() %}
+  <label class="category-chip">
+    <input type="checkbox" name="types" value="{{ key }}" form="playershops-form"
+           {% if key in selected_types %}checked{% endif %}>
+    {{ label }}
+  </label>
+  {% endfor %}
+</div>
+
+<div class="table-scroll">
+<table class="stats-table log-table">
+  <thead>
+    <tr>
+      <th class="log-col-time">Time</th>
+      <th>Type</th>
+      <th>Player</th>
+      <th>Shop owner</th>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Unit price</th>
+      <th>Total</th>
+      <th>Location</th>
+    </tr>
+  </thead>
+  <tbody id="playershops-tbody">
+    {% for e in entries %}
+    <tr>
+      <td class="mono log-col-time local-time" data-epoch="{{ e.timestamp }}"></td>
+      <td><span class="category-badge">{{ all_types.get(e.type, e.type) }}</span></td>
+      <td>{{ e.buyer or e.seller or "" }}</td>
+      <td>{{ e.owner or "" }}</td>
+      <td>{{ e.itemName or e.itemType or "" }}</td>
+      <td>{{ e.quantity }}</td>
+      <td>{{ e.unitPrice }}</td>
+      <td><strong>{{ e.totalPrice }}</strong></td>
+      <td class="mono">{{ e.x }}, {{ e.y }}, {{ e.z }}</td>
+    </tr>
+    {% endfor %}
+    {% if not entries %}
+    <tr><td colspan="9" class="empty">No transactions found for the selected filters.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+</div>
+
+<script>
+  var tbody = document.getElementById("playershops-tbody");
+  var linesInput = document.getElementById("lines");
+  var autoRefresh = document.getElementById("auto-refresh");
+  var refreshTimer = null;
+
+  function isScrolledToTop() {
+    return window.scrollY < 50;
+  }
+
+  function selectedTypes() {
+    return Array.from(document.querySelectorAll('input[name="types"]:checked')).map(function (el) {
+      return el.value;
+    });
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function formatLocalTimes() {
+    document.querySelectorAll("#playershops-tbody .local-time[data-epoch]").forEach(function (el) {
+      var epoch = parseFloat(el.dataset.epoch);
+      if (!epoch) return;
+      el.textContent = new Date(epoch * 1000).toLocaleString();
+    });
+  }
+
+  function renderRows(entries) {
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">No transactions found for the selected filters.</td></tr>';
+      return;
+    }
+    var allTypes = {{ all_types|tojson }};
+    var html = "";
+    entries.forEach(function (e) {
+      var typeLabel = allTypes[e.type] || e.type;
+      var player = e.buyer || e.seller || "";
+      html += "<tr><td class=\"mono log-col-time local-time\" data-epoch=\"" + e.timestamp + "\"></td>" +
+        "<td><span class=\"category-badge\">" + escapeHtml(typeLabel) + "</span></td>" +
+        "<td>" + escapeHtml(player) + "</td>" +
+        "<td>" + escapeHtml(e.owner || "") + "</td>" +
+        "<td>" + escapeHtml(e.itemName || e.itemType || "") + "</td>" +
+        "<td>" + escapeHtml(String(e.quantity)) + "</td>" +
+        "<td>" + escapeHtml(String(e.unitPrice)) + "</td>" +
+        "<td><strong>" + escapeHtml(String(e.totalPrice)) + "</strong></td>" +
+        "<td class=\"mono\">" + escapeHtml(e.x + ", " + e.y + ", " + e.z) + "</td></tr>";
+    });
+    tbody.innerHTML = html;
+  }
+
+  function refreshTransactions() {
+    var stickToTop = isScrolledToTop();
+    var params = new URLSearchParams();
+    params.set("lines", linesInput ? linesInput.value : {{ lines }});
+    selectedTypes().forEach(function (t) { params.append("types", t); });
+
+    fetch("/playershops/raw?" + params.toString())
+      .then(function (resp) { return resp.ok ? resp.json() : null; })
+      .then(function (entries) {
+        if (entries === null) return;
+        renderRows(entries);
+        formatLocalTimes();
+        if (stickToTop) window.scrollTo(0, 0);
+      });
+  }
+
+  function setAutoRefresh(enabled) {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    if (enabled) refreshTimer = setInterval(refreshTransactions, 5000);
+    localStorage.setItem("pzAdminPlayerShopsAutoRefresh", enabled ? "1" : "0");
+  }
+
+  formatLocalTimes();
+
+  if (autoRefresh) {
+    autoRefresh.checked = localStorage.getItem("pzAdminPlayerShopsAutoRefresh") === "1";
+    setAutoRefresh(autoRefresh.checked);
+    autoRefresh.addEventListener("change", function () {
+      setAutoRefresh(autoRefresh.checked);
+    });
+  }
+
+  document.querySelectorAll('input[name="types"]').forEach(function (el) {
+    el.addEventListener("change", function () {
+      document.getElementById("playershops-form").requestSubmit();
+    });
+  });
+</script>
+{% endblock %}
