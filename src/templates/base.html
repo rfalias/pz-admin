@@ -19,6 +19,7 @@
       <a href="/stats" class="{{ 'active' if active == 'stats' else '' }}">Players</a>
       <a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>
       <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">Settings</a>
+      <a href="/audit" class="{{ 'active' if active == 'audit' else '' }}">Audit Log</a>
     </nav>
     <div class="header-right">
       <span class="status-badge" id="status-badge" title="Checking...">
@@ -41,7 +42,7 @@
   <div class="flash">{{ flash }}</div>
   {% endif %}
 
-  <main class="{{ 'main-wide' if active in ['stats', 'battlepass'] else '' }}">
+  <main class="{{ 'main-wide' if active in ['stats', 'battlepass', 'audit'] else '' }}">
     {% block content %}{% endblock %}
   </main>
 

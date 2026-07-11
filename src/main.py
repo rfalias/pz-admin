@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+import audit_log
 import battlepass_data
 import battlepass_logs
 import db_stats
@@ -68,6 +69,7 @@ APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 DEATHS_DB_PATH = APP_DATA_DIR / "deaths.db"
 LAST_WIPE_PATH = APP_DATA_DIR / "last_wipe.json"
 MOD_TITLES_CACHE_PATH = APP_DATA_DIR / "mod_titles.json"
+AUDIT_DB_PATH = APP_DATA_DIR / "audit.db"
 DEATH_SCAN_INTERVAL_SECONDS = int(os.environ.get("DEATH_SCAN_INTERVAL_SECONDS", "60"))
 MOD_TITLES_REFRESH_INTERVAL_SECONDS = int(os.environ.get("MOD_TITLES_REFRESH_INTERVAL_SECONDS", "3600"))
 USERS_FILE = Path(os.environ.get("USERS_FILE", "/app/users.json"))
@@ -144,6 +146,34 @@ def pop_flash(request: Request) -> str | None:
     return request.session.pop("flash", None)
 
 
+def _client_ip(request: Request) -> str | None:
+    """Behind Traefik, request.client.host is the proxy's own address, not
+    the real client. Prefer the first hop of X-Forwarded-For when present."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else None
+
+
+async def _audit(
+    request: Request,
+    action: str,
+    actor: str | None,
+    detail: str | None = None,
+    success: bool = True,
+) -> None:
+    """Best-effort audit write - a logging failure must never break the
+    action it's recording."""
+    try:
+        await asyncio.to_thread(
+            audit_log.record_event, AUDIT_DB_PATH, action, actor, detail, success, _client_ip(request)
+        )
+    except Exception:
+        pass
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request, user: User | None = Depends(current_user_optional)):
     if user:
@@ -160,9 +190,11 @@ async def login_submit(
 ):
     user = await user_manager.authenticate(credentials)
     if user is None or not user.is_active:
+        await _audit(request, "login_failed", credentials.username, success=False)
         return templates.TemplateResponse(
             request, "login.html", {"error": "Invalid username or password"}, status_code=401
         )
+    await _audit(request, "login", user.username)
     login_response = await auth_backend.login(strategy, user)
     redirect = RedirectResponse("/", status_code=303)
     redirect.headers["set-cookie"] = login_response.headers["set-cookie"]
@@ -178,6 +210,7 @@ async def logout(
     request.session.clear()
     user, token = user_token
     if user:
+        await _audit(request, "logout", user.username)
         logout_response = await auth_backend.logout(strategy, user, token)
         redirect = RedirectResponse("/dashboard", status_code=303)
         redirect.headers["set-cookie"] = logout_response.headers["set-cookie"]
@@ -285,6 +318,7 @@ async def server_save(request: Request, user: User | None = Depends(current_user
     entries = ini_config.parse_ini(SERVER_INI_PATH)
     ini_config.apply_form(entries, form)
     ini_config.write_ini(SERVER_INI_PATH, entries)
+    await _audit(request, "server_save", user.username)
     flash = "Server settings saved. Restart the server to apply changes."
     mods_warning = ini_config.validate_mods(entries)
     if mods_warning:
@@ -340,6 +374,7 @@ async def mods_save(request: Request, user: User | None = Depends(current_user_o
         managed_keys={"Mods", "WorkshopItems"},
     )
     ini_config.write_ini(SERVER_INI_PATH, entries)
+    await _audit(request, "mods_save", user.username, detail=f"{len(pairs)} mods")
     flash = "Mods saved. Restart the server to apply changes."
     mods_warning = ini_config.validate_mods(entries)
     if mods_warning:
@@ -358,6 +393,7 @@ async def mods_import(request: Request, user: User | None = Depends(current_user
     if not workshop_id:
         return JSONResponse({"error": "Could not find a workshop ID in that URL"}, status_code=400)
     mods, errors = await asyncio.to_thread(mod_parser.resolve_mod_tree, workshop_id)
+    await _audit(request, "mods_import", user.username, detail=url, success=not errors)
     return JSONResponse({"mods": mods, "errors": errors})
 
 
@@ -388,6 +424,7 @@ async def sandbox_save(request: Request, user: User | None = Depends(current_use
     entries, var_name = lua_config.parse_sandbox(SANDBOX_LUA_PATH)
     lua_config.apply_form(entries, form)
     lua_config.write_sandbox(SANDBOX_LUA_PATH, entries, var_name)
+    await _audit(request, "sandbox_save", user.username)
     request.session["flash"] = "Sandbox settings saved. Restart the server to apply changes."
     return RedirectResponse("/sandbox", status_code=303)
 
@@ -552,14 +589,16 @@ def status_raw(request: Request):
 
 
 @app.post("/rcon/save")
-def rcon_save(request: Request, user: User | None = Depends(current_user_optional)):
+async def rcon_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
     try:
         response = rcon_client.execute(RCON_HOST, RCON_PORT, RCON_PASSWORD, "save")
         request.session["flash"] = f"Save command sent via RCON: {response or 'OK'}"
+        await _audit(request, "rcon_save", user.username)
     except Exception as exc:
         request.session["flash"] = f"Failed to send save command via RCON: {exc}"
+        await _audit(request, "rcon_save", user.username, detail=str(exc), success=False)
     referer = request.headers.get("referer", "/server")
     return RedirectResponse(referer, status_code=303)
 
@@ -581,6 +620,18 @@ def remote_page(request: Request, user: User | None = Depends(current_user_optio
     )
 
 
+def _classify_remote_command(command: str) -> str:
+    """Best-effort semantic label for a raw RCON command string, since
+    /remote/run is used generically for the console, access-level changes
+    (Players page), and teleports (Players page)."""
+    first_word = command.strip().split(" ", 1)[0].lower()
+    if first_word == "setaccesslevel":
+        return "access_level_change"
+    if first_word == "teleportplayer":
+        return "teleport"
+    return "remote_run"
+
+
 @app.post("/remote/run")
 async def remote_run(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
@@ -589,10 +640,13 @@ async def remote_run(request: Request, user: User | None = Depends(current_user_
     command = (body.get("command") or "").strip()
     if not command:
         return JSONResponse({"error": "No command given"}, status_code=400)
+    action = _classify_remote_command(command)
     try:
         response = rcon_client.execute(RCON_HOST, RCON_PORT, RCON_PASSWORD, command)
+        await _audit(request, action, user.username, detail=command)
         return JSONResponse({"response": response, "error": None})
     except Exception as exc:
+        await _audit(request, action, user.username, detail=command, success=False)
         return JSONResponse({"response": None, "error": str(exc)})
 
 
@@ -626,6 +680,11 @@ async def wipe_server(request: Request, user: User | None = Depends(current_user
         await asyncio.to_thread(docker_control.stop_container)
         steps.append("Server stopped.")
     except Exception as exc:
+        await _audit(
+            request, "wipe", user.username,
+            detail=f"world={wipe_world} players={wipe_players}: failed to stop server: {exc}",
+            success=False,
+        )
         return JSONResponse({"error": f"Failed to stop server: {exc}"})
 
     if wipe_world:
@@ -659,18 +718,24 @@ async def wipe_server(request: Request, user: User | None = Depends(current_user
     except Exception as exc:
         steps.append(f"Warning: could not start server: {exc}")
 
+    await _audit(
+        request, "wipe", user.username,
+        detail=f"world={wipe_world} players={wipe_players}: {' '.join(steps)}",
+    )
     return JSONResponse({"message": " ".join(steps), "error": None})
 
 
 @app.post("/restart")
-def restart_server(request: Request, user: User | None = Depends(current_user_optional)):
+async def restart_server(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
     try:
         status = docker_control.restart_pz_container()
         request.session["flash"] = f"Restart signal sent to '{PZ_CONTAINER_NAME}' (status: {status})."
+        await _audit(request, "restart", user.username)
     except Exception as exc:
         request.session["flash"] = f"Failed to restart '{PZ_CONTAINER_NAME}': {exc}"
+        await _audit(request, "restart", user.username, detail=str(exc), success=False)
     referer = request.headers.get("referer", "/server")
     return RedirectResponse(referer, status_code=303)
 
@@ -721,8 +786,10 @@ async def settings_create_user(
         try:
             await create_user(username, password, is_superuser=bool(is_superuser))
             request.session["flash"] = f"Created user '{username}'."
+            await _audit(request, "user_create", user.username, detail=username)
         except UsernameTakenError:
             request.session["flash"] = f"Username '{username}' is already taken."
+            await _audit(request, "user_create", user.username, detail=username, success=False)
     return RedirectResponse("/settings", status_code=303)
 
 
@@ -745,8 +812,10 @@ async def settings_toggle_active(
             await set_user_active(user_id, not target.is_active)
             verb = "Enabled" if not target.is_active else "Disabled"
             request.session["flash"] = f"{verb} '{target.username}'."
+            await _audit(request, "user_toggle_active", user.username, detail=target.username)
         except LastSuperuserError:
             request.session["flash"] = "Can't disable the last active admin."
+            await _audit(request, "user_toggle_active", user.username, detail=target.username, success=False)
     return RedirectResponse("/settings", status_code=303)
 
 
@@ -769,8 +838,10 @@ async def settings_toggle_superuser(
             await set_user_superuser(user_id, not target.is_superuser)
             verb = "Granted" if not target.is_superuser else "Revoked"
             request.session["flash"] = f"{verb} admin for '{target.username}'."
+            await _audit(request, "user_toggle_superuser", user.username, detail=target.username)
         except LastSuperuserError:
             request.session["flash"] = "Can't remove the last active admin."
+            await _audit(request, "user_toggle_superuser", user.username, detail=target.username, success=False)
     return RedirectResponse("/settings", status_code=303)
 
 
@@ -792,6 +863,7 @@ async def settings_reset_password(
     else:
         await set_user_password(user_id, password)
         request.session["flash"] = f"Password updated for '{target.username}'."
+        await _audit(request, "user_password_reset", user.username, detail=target.username)
     return RedirectResponse("/settings", status_code=303)
 
 
@@ -813,6 +885,57 @@ async def settings_delete_user(
         try:
             await delete_user(user_id)
             request.session["flash"] = f"Deleted user '{target.username}'."
+            await _audit(request, "user_delete", user.username, detail=target.username)
         except LastSuperuserError:
             request.session["flash"] = "Can't delete the last active admin."
+            await _audit(request, "user_delete", user.username, detail=target.username, success=False)
     return RedirectResponse("/settings", status_code=303)
+
+
+def _selected_audit_actions(actions: list[str] | None) -> list[str]:
+    return [a for a in (actions or []) if a in audit_log.ACTIONS]
+
+
+@app.get("/audit", response_class=HTMLResponse)
+async def audit_page(
+    request: Request,
+    limit: int = 200,
+    actions: list[str] | None = Query(None),
+    user: User | None = Depends(current_user_optional),
+):
+    denied = _require_admin(request, user)
+    if denied:
+        return denied
+    limit = max(10, min(limit, 2000))
+    selected = _selected_audit_actions(actions)
+    entries = await asyncio.to_thread(audit_log.list_events, AUDIT_DB_PATH, limit, selected)
+    return templates.TemplateResponse(
+        request,
+        "audit.html",
+        {
+            "active": "audit",
+            "user": user.username,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "limit": limit,
+            "all_actions": audit_log.ACTIONS,
+            "selected_actions": selected,
+            "entries": entries,
+        },
+    )
+
+
+@app.get("/audit/raw")
+async def audit_raw(
+    request: Request,
+    limit: int = 200,
+    actions: list[str] | None = Query(None),
+    user: User | None = Depends(current_user_optional),
+):
+    denied = _require_admin(request, user)
+    if denied:
+        return JSONResponse([], status_code=403)
+    limit = max(10, min(limit, 2000))
+    selected = _selected_audit_actions(actions)
+    entries = await asyncio.to_thread(audit_log.list_events, AUDIT_DB_PATH, limit, selected)
+    return JSONResponse(entries)

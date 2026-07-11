@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" action="/audit" class="logs-controls" id="audit-form">
+  <div class="logs-controls-form">
+    <label for="limit">Rows</label>
+    <input type="number" id="limit" name="limit" value="{{ limit }}" min="10" max="2000" step="10">
+    <button type="submit" class="save-btn">Refresh</button>
+  </div>
+  <label class="auto-refresh-toggle">
+    <input type="checkbox" id="auto-refresh">
+    Auto-refresh (5s)
+  </label>
+</form>
+
+<div class="category-filters">
+  {% for key, label in all_actions.items() %}
+  <label class="category-chip">
+    <input type="checkbox" name="actions" value="{{ key }}" form="audit-form"
+           {% if key in selected_actions %}checked{% endif %}>
+    {{ label }}
+  </label>
+  {% endfor %}
+</div>
+
+<div class="table-scroll">
+<table class="stats-table log-table">
+  <thead>
+    <tr>
+      <th class="log-col-time">Time</th>
+      <th>Actor</th>
+      <th>Action</th>
+      <th>Detail</th>
+      <th>Result</th>
+      <th>IP</th>
+    </tr>
+  </thead>
+  <tbody id="audit-tbody">
+    {% for e in entries %}
+    <tr>
+      <td class="mono log-col-time local-time" data-epoch="{{ e.epoch }}"></td>
+      <td>{{ e.actor or "" }}</td>
+      <td><span class="category-badge">{{ all_actions.get(e.action, e.action) }}</span></td>
+      <td class="log-message">{{ e.detail or "" }}</td>
+      <td><span class="settings-badge {{ 'settings-badge-active' if e.success else 'settings-badge-disabled' }}">{{ "OK" if e.success else "FAILED" }}</span></td>
+      <td class="mono">{{ e.ip or "" }}</td>
+    </tr>
+    {% endfor %}
+    {% if not entries %}
+    <tr><td colspan="6" class="empty">No audit entries found for the selected filters.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+</div>
+
+<script>
+  var tbody = document.getElementById("audit-tbody");
+  var limitInput = document.getElementById("limit");
+  var autoRefresh = document.getElementById("auto-refresh");
+  var refreshTimer = null;
+
+  function isScrolledToTop() {
+    return window.scrollY < 50;
+  }
+
+  function selectedActions() {
+    return Array.from(document.querySelectorAll('input[name="actions"]:checked')).map(function (el) {
+      return el.value;
+    });
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function formatLocalTimes() {
+    document.querySelectorAll("#audit-tbody .local-time[data-epoch]").forEach(function (el) {
+      var epoch = parseFloat(el.dataset.epoch);
+      if (!epoch) return;
+      el.textContent = new Date(epoch * 1000).toLocaleString();
+    });
+  }
+
+  function renderRows(entries) {
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">No audit entries found for the selected filters.</td></tr>';
+      return;
+    }
+    var allActions = {{ all_actions|tojson }};
+    var html = "";
+    entries.forEach(function (e) {
+      var actionLabel = allActions[e.action] || e.action;
+      var resultClass = e.success ? "settings-badge-active" : "settings-badge-disabled";
+      var resultText = e.success ? "OK" : "FAILED";
+      html += "<tr><td class=\"mono log-col-time local-time\" data-epoch=\"" + e.epoch + "\"></td>" +
+        "<td>" + escapeHtml(e.actor || "") + "</td>" +
+        "<td><span class=\"category-badge\">" + escapeHtml(actionLabel) + "</span></td>" +
+        "<td class=\"log-message\">" + escapeHtml(e.detail || "") + "</td>" +
+        "<td><span class=\"settings-badge " + resultClass + "\">" + resultText + "</span></td>" +
+        "<td class=\"mono\">" + escapeHtml(e.ip || "") + "</td></tr>";
+    });
+    tbody.innerHTML = html;
+  }
+
+  function refreshAudit() {
+    var stickToTop = isScrolledToTop();
+    var params = new URLSearchParams();
+    params.set("limit", limitInput ? limitInput.value : {{ limit }});
+    selectedActions().forEach(function (a) { params.append("actions", a); });
+
+    fetch("/audit/raw?" + params.toString())
+      .then(function (resp) { return resp.ok ? resp.json() : null; })
+      .then(function (entries) {
+        if (entries === null) return;
+        renderRows(entries);
+        formatLocalTimes();
+        if (stickToTop) window.scrollTo(0, 0);
+      });
+  }
+
+  function setAutoRefresh(enabled) {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+    if (enabled) refreshTimer = setInterval(refreshAudit, 5000);
+    localStorage.setItem("pzAdminAuditAutoRefresh", enabled ? "1" : "0");
+  }
+
+  formatLocalTimes();
+
+  if (autoRefresh) {
+    autoRefresh.checked = localStorage.getItem("pzAdminAuditAutoRefresh") === "1";
+    setAutoRefresh(autoRefresh.checked);
+    autoRefresh.addEventListener("change", function () {
+      setAutoRefresh(autoRefresh.checked);
+    });
+  }
+
+  document.querySelectorAll('input[name="actions"]').forEach(function (el) {
+    el.addEventListener("change", function () {
+      document.getElementById("audit-form").requestSubmit();
+    });
+  });
+</script>
+{% endblock %}
