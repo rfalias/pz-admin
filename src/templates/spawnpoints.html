@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+<p class="help">Event spawn points read by the DynamicSpawnPoints mod. A newly added point is live in the in-game spawn picker immediately, but only becomes a valid in-place respawn destination after the next server restart.</p>
+
+<form method="post" action="/spawnpoints" id="spawnpoints-form">
+  <table class="stats-table" id="spawnpoints-table">
+    <thead>
+      <tr>
+        <th style="width: 35%;">Name</th>
+        <th>X</th>
+        <th>Y</th>
+        <th>Z</th>
+        <th>Created by</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="spawnpoints-tbody">
+      {% for e in entries %}
+      <tr>
+        <td>
+          <input type="hidden" name="id" value="{{ e.id }}">
+          <input type="text" name="name" value="{{ e.name }}" placeholder="Spawn name">
+        </td>
+        <td><input type="number" name="x" value="{{ e.x }}" step="1"></td>
+        <td><input type="number" name="y" value="{{ e.y }}" step="1"></td>
+        <td><input type="number" name="z" value="{{ e.z }}" step="1"></td>
+        <td>
+          <input type="hidden" name="created_by" value="{{ e.created_by }}">
+          <span class="help">{{ e.created_by or "" }}</span>
+        </td>
+        <td><button type="button" class="row-remove-btn" onclick="this.closest('tr').remove()">Remove</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="button" class="char-toggle" id="add-spawnpoint-btn">Add spawn point</button>
+
+  <div class="save-bar">
+    <button type="submit" class="save-btn">Save Spawn Points</button>
+  </div>
+</form>
+
+<script src="/static/spawnpoints.js?v={{ static_version }}" defer></script>
+{% endblock %}

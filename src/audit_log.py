@@ -13,6 +13,7 @@ ACTIONS = {
     "mods_save": "Mods saved",
     "mods_import": "Mod import",
     "sandbox_save": "Sandbox saved",
+    "spawnpoints_save": "Spawn points saved",
     "rcon_save": "World save (RCON)",
     "remote_run": "Remote command",
     "access_level_change": "Access level change",

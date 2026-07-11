@@ -21,6 +21,7 @@ import battlepass_logs
 import db_stats
 import death_tracker
 import docker_control
+import dynamic_spawnpoints
 import ini_config
 import log_tables
 import lua_config
@@ -65,6 +66,7 @@ SAVE_DB_PATH = CONFIG_DIR / "Saves" / "Multiplayer" / SERVER_NAME / "players.db"
 LOGS_DIR = CONFIG_DIR / "Logs"
 DEATH_LOG_PATH = CONFIG_DIR / "Lua" / "DeathTracker.log"
 BATTLEPASS_DATA_PATH = CONFIG_DIR / "Lua" / "BattlePassPlayerData.json"
+SPAWNPOINTS_PATH = CONFIG_DIR / "Lua" / f"DynamicSpawnPoints_{SERVER_NAME}_EventSpawns.txt"
 APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 DEATHS_DB_PATH = APP_DATA_DIR / "deaths.db"
 LAST_WIPE_PATH = APP_DATA_DIR / "last_wipe.json"
@@ -427,6 +429,80 @@ async def sandbox_save(request: Request, user: User | None = Depends(current_use
     await _audit(request, "sandbox_save", user.username)
     request.session["flash"] = "Sandbox settings saved. Restart the server to apply changes."
     return RedirectResponse("/sandbox", status_code=303)
+
+
+@app.get("/spawnpoints", response_class=HTMLResponse)
+def spawnpoints_page(request: Request, user: User | None = Depends(current_user_optional)):
+    if not user:
+        return RedirectResponse("/dashboard", status_code=303)
+    entries = dynamic_spawnpoints.parse_file(SPAWNPOINTS_PATH)
+    return templates.TemplateResponse(
+        request,
+        "spawnpoints.html",
+        {
+            "active": "spawnpoints",
+            "user": user.username,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "config_path": str(SPAWNPOINTS_PATH),
+            "entries": entries,
+        },
+    )
+
+
+@app.post("/spawnpoints")
+async def spawnpoints_save(request: Request, user: User | None = Depends(current_user_optional)):
+    if not user:
+        return RedirectResponse("/dashboard", status_code=303)
+    form = await request.form()
+    ids = form.getlist("id")
+    names = form.getlist("name")
+    xs = form.getlist("x")
+    ys = form.getlist("y")
+    zs = form.getlist("z")
+    created_bys = form.getlist("created_by")
+
+    new_id = dynamic_spawnpoints.next_id(dynamic_spawnpoints.parse_file(SPAWNPOINTS_PATH))
+    entries = []
+    skipped = 0
+    for id_str, name, x_str, y_str, z_str, created_by in zip_longest(
+        ids, names, xs, ys, zs, created_bys, fillvalue=""
+    ):
+        name = name.strip()
+        if not name:
+            continue
+        try:
+            x, y = int(x_str), int(y_str)
+        except ValueError:
+            skipped += 1
+            continue
+        try:
+            z = int(z_str)
+        except ValueError:
+            z = 0
+        if id_str.strip().lstrip("-").isdigit():
+            row_id = int(id_str)
+        else:
+            row_id = new_id
+            new_id += 1
+        entries.append(
+            {
+                "id": row_id,
+                "name": name,
+                "x": x,
+                "y": y,
+                "z": z,
+                "created_by": created_by.strip() or user.username,
+            }
+        )
+
+    dynamic_spawnpoints.write_file(SPAWNPOINTS_PATH, entries)
+    await _audit(request, "spawnpoints_save", user.username, detail=f"{len(entries)} spawn points")
+    flash = f"Saved {len(entries)} spawn points."
+    if skipped:
+        flash += f" Skipped {skipped} row(s) with invalid X/Y coordinates."
+    request.session["flash"] = flash
+    return RedirectResponse("/spawnpoints", status_code=303)
 
 
 def _selected_log_categories(categories: list[str] | None) -> list[str]:
