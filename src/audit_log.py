@@ -65,6 +65,35 @@ def record_event(
         conn.close()
 
 
+def last_activity(db_path: Path) -> dict[str, dict]:
+    """Per-actor most recent successful login epoch and most recent event of
+    any kind (activity, success or not), keyed by username. An actor with no
+    rows of a given kind simply has no key for it - e.g. a user who was
+    created but never logged in has no "login" entry."""
+    if not db_path.exists():
+        return {}
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        login_rows = conn.execute(
+            "SELECT actor, MAX(epoch) AS epoch FROM audit_events "
+            "WHERE action = 'login' AND success = 1 AND actor IS NOT NULL "
+            "GROUP BY actor"
+        ).fetchall()
+        activity_rows = conn.execute(
+            "SELECT actor, MAX(epoch) AS epoch FROM audit_events "
+            "WHERE actor IS NOT NULL GROUP BY actor"
+        ).fetchall()
+        result: dict[str, dict] = {}
+        for row in login_rows:
+            result.setdefault(row["actor"], {})["last_login_epoch"] = row["epoch"]
+        for row in activity_rows:
+            result.setdefault(row["actor"], {})["last_activity_epoch"] = row["epoch"]
+        return result
+    finally:
+        conn.close()
+
+
 def list_events(db_path: Path, limit: int = 200, actions: list[str] | None = None) -> list[dict]:
     """Return most-recent-first audit rows, optionally filtered to a set of
     action types. `actions=None` or empty returns all types."""

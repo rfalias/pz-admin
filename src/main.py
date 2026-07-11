@@ -882,6 +882,18 @@ async def settings_page(request: Request, user: User | None = Depends(current_us
     denied = _require_admin(request, user)
     if denied:
         return denied
+    activity = await asyncio.to_thread(audit_log.last_activity, AUDIT_DB_PATH)
+    users = [
+        {
+            "id": u.id,
+            "username": u.username,
+            "is_superuser": u.is_superuser,
+            "is_active": u.is_active,
+            "last_login_epoch": activity.get(u.username, {}).get("last_login_epoch"),
+            "last_activity_epoch": activity.get(u.username, {}).get("last_activity_epoch"),
+        }
+        for u in await list_users()
+    ]
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -890,7 +902,7 @@ async def settings_page(request: Request, user: User | None = Depends(current_us
             "user": user.username,
             "container": PZ_CONTAINER_NAME,
             "flash": pop_flash(request),
-            "users": await list_users(),
+            "users": users,
             "current_user_id": str(user.id),
         },
     )

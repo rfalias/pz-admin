@@ -28,6 +28,8 @@
       <th>Username</th>
       <th>Role</th>
       <th>Status</th>
+      <th>Last login</th>
+      <th>Last activity</th>
       <th>Reset password</th>
       <th></th>
     </tr>
@@ -65,6 +67,8 @@
           {% endif %}
         {% endif %}
       </td>
+      <td class="mono local-time" data-epoch="{{ u.last_login_epoch or '' }}">{{ "Never" if not u.last_login_epoch }}</td>
+      <td class="mono local-time" data-epoch="{{ u.last_activity_epoch or '' }}">{{ "Never" if not u.last_activity_epoch }}</td>
       <td>
         <form method="post" action="/settings/users/{{ u.id }}/password" class="settings-inline-form settings-password-form">
           <input type="password" name="password" placeholder="new password" required autocomplete="new-password">
@@ -84,4 +88,12 @@
   </tbody>
 </table>
 </div>
+
+<script>
+  document.querySelectorAll(".local-time[data-epoch]").forEach(function (el) {
+    var epoch = parseFloat(el.dataset.epoch);
+    if (!epoch) return;
+    el.textContent = new Date(epoch * 1000).toLocaleString();
+  });
+</script>
 {% endblock %}
