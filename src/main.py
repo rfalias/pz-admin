@@ -463,12 +463,13 @@ async def spawnpoints_save(request: Request, user: User | None = Depends(current
     ys = form.getlist("y")
     zs = form.getlist("z")
     created_bys = form.getlist("created_by")
+    enableds = form.getlist("enabled")
 
     new_id = dynamic_spawnpoints.next_id(dynamic_spawnpoints.parse_file(SPAWNPOINTS_PATH))
     entries = []
     skipped = 0
-    for id_str, name, x_str, y_str, z_str, created_by in zip_longest(
-        ids, names, xs, ys, zs, created_bys, fillvalue=""
+    for id_str, name, x_str, y_str, z_str, created_by, enabled_str in zip_longest(
+        ids, names, xs, ys, zs, created_bys, enableds, fillvalue=""
     ):
         name = name.strip()
         if not name:
@@ -495,6 +496,7 @@ async def spawnpoints_save(request: Request, user: User | None = Depends(current
                 "y": y,
                 "z": z,
                 "created_by": created_by.strip() or user.username,
+                "enabled": enabled_str != "0",
             }
         )
 

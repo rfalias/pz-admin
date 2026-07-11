@@ -41,6 +41,21 @@
     createdByCell.appendChild(createdBySpan);
     tr.appendChild(createdByCell);
 
+    var enabledCell = document.createElement("td");
+    var enabledHidden = document.createElement("input");
+    enabledHidden.type = "hidden";
+    enabledHidden.name = "enabled";
+    enabledHidden.value = "1";
+    enabledCell.appendChild(enabledHidden);
+    var enabledCheckbox = document.createElement("input");
+    enabledCheckbox.type = "checkbox";
+    enabledCheckbox.checked = true;
+    enabledCheckbox.addEventListener("change", function () {
+      enabledHidden.value = enabledCheckbox.checked ? "1" : "0";
+    });
+    enabledCell.appendChild(enabledCheckbox);
+    tr.appendChild(enabledCell);
+
     var removeCell = document.createElement("td");
     var removeBtn = document.createElement("button");
     removeBtn.type = "button";

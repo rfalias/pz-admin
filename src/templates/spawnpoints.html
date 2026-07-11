@@ -12,6 +12,7 @@
         <th>Y</th>
         <th>Z</th>
         <th>Created by</th>
+        <th>Enabled</th>
         <th></th>
       </tr>
     </thead>
@@ -28,6 +29,11 @@
         <td>
           <input type="hidden" name="created_by" value="{{ e.created_by }}">
           <span class="help">{{ e.created_by or "" }}</span>
+        </td>
+        <td>
+          <input type="hidden" name="enabled" value="{{ '1' if e.enabled else '0' }}">
+          <input type="checkbox" {% if e.enabled %}checked{% endif %}
+                 onchange="this.previousElementSibling.value = this.checked ? '1' : '0'">
         </td>
         <td><button type="button" class="row-remove-btn" onclick="this.closest('tr').remove()">Remove</button></td>
       </tr>
