@@ -24,6 +24,7 @@ import ini_config
 import log_tables
 import lua_config
 import mod_parser
+import mod_titles
 import rcon_client
 import rcon_commands
 from auth_db import (
@@ -66,7 +67,9 @@ BATTLEPASS_DATA_PATH = CONFIG_DIR / "Lua" / "BattlePassPlayerData.json"
 APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 DEATHS_DB_PATH = APP_DATA_DIR / "deaths.db"
 LAST_WIPE_PATH = APP_DATA_DIR / "last_wipe.json"
+MOD_TITLES_CACHE_PATH = APP_DATA_DIR / "mod_titles.json"
 DEATH_SCAN_INTERVAL_SECONDS = int(os.environ.get("DEATH_SCAN_INTERVAL_SECONDS", "60"))
+MOD_TITLES_REFRESH_INTERVAL_SECONDS = int(os.environ.get("MOD_TITLES_REFRESH_INTERVAL_SECONDS", "3600"))
 USERS_FILE = Path(os.environ.get("USERS_FILE", "/app/users.json"))
 
 DEFAULT_LOG_LINES = 100
@@ -87,15 +90,31 @@ async def _death_scan_loop():
         await asyncio.sleep(DEATH_SCAN_INTERVAL_SECONDS)
 
 
+async def _mod_titles_loop():
+    """Periodically refresh cached Workshop titles for the currently
+    configured mods, so the dashboard never has to fetch Steam on a page
+    view (it's the public, unauthenticated landing page)."""
+    while True:
+        try:
+            entries = ini_config.parse_ini(SERVER_INI_PATH)
+            workshop_ids = ini_config.split_list(ini_config.get_value(entries, "WorkshopItems"))
+            await asyncio.to_thread(mod_titles.refresh_titles, MOD_TITLES_CACHE_PATH, workshop_ids)
+        except Exception:
+            pass
+        await asyncio.sleep(MOD_TITLES_REFRESH_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
     await migrate_users_json(USERS_FILE)
-    task = asyncio.create_task(_death_scan_loop())
+    death_task = asyncio.create_task(_death_scan_loop())
+    mod_titles_task = asyncio.create_task(_mod_titles_loop())
     try:
         yield
     finally:
-        task.cancel()
+        death_task.cancel()
+        mod_titles_task.cancel()
 
 
 app = FastAPI(title="PZ Admin", lifespan=lifespan)
@@ -178,6 +197,20 @@ def _load_battlepass_leaderboard() -> dict | None:
     return battlepass_data.build_leaderboard(raw_data) if raw_data else None
 
 
+def _load_installed_mods(entries: list) -> list[str]:
+    """Friendly names of installed mods: cached Workshop title if known,
+    else the raw mod ID/workshop ID as a fallback."""
+    mod_ids = ini_config.split_list(ini_config.get_value(entries, "Mods"))
+    workshop_ids = ini_config.split_list(ini_config.get_value(entries, "WorkshopItems"))
+    titles = mod_titles.get_titles(MOD_TITLES_CACHE_PATH)
+    names = []
+    for mod_id, workshop_id in zip_longest(mod_ids, workshop_ids, fillvalue=""):
+        if not mod_id and not workshop_id:
+            continue
+        names.append(titles.get(workshop_id) or mod_id or f"Workshop ID {workshop_id}")
+    return names
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request):
     entries = ini_config.parse_ini(SERVER_INI_PATH)
@@ -190,6 +223,7 @@ def dashboard_page(request: Request):
             "connect_host": CONNECT_HOST,
             "connect_port": ini_config.get_value(entries, "DefaultPort", "16261"),
             "leaderboard": _load_battlepass_leaderboard(),
+            "mods": _load_installed_mods(entries),
         },
     )
 

@@ -41,6 +41,19 @@
       </div>
     </div>
 
+    <details class="group">
+      <summary>Installed Mods{% if mods %} ({{ mods|length }}){% endif %}</summary>
+      <div class="group-body">
+        {% if not mods %}
+        <p class="empty">No mods configured.</p>
+        {% else %}
+        <div class="mod-tag-list">
+          {% for name in mods %}<span class="mod-tag">{{ name }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </details>
+
     <div class="group">
       <div class="group-summary-static">
         Battle Pass Leaderboard{% if leaderboard and leaderboard.season_name %} &mdash; {{ leaderboard.season_name }}{% endif %}
