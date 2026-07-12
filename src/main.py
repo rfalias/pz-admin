@@ -625,6 +625,30 @@ def battlepass_page(request: Request, user: User | None = Depends(current_user_o
     )
 
 
+@app.get("/battlepass/player/{username}", response_class=HTMLResponse)
+def battlepass_player_page(
+    request: Request, username: str, user: User | None = Depends(current_user_optional)
+):
+    if not user:
+        return RedirectResponse("/dashboard", status_code=303)
+    raw_data = battlepass_data.load_battlepass_data(BATTLEPASS_DATA_PATH)
+    detail = battlepass_data.build_player_detail(raw_data, username) if raw_data else None
+    if detail is None:
+        request.session["flash"] = f"No battle pass data found for '{username}'."
+        return RedirectResponse("/battlepass", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "battlepass_player.html",
+        {
+            "active": "battlepass",
+            "user": user.username,
+            "container": PZ_CONTAINER_NAME,
+            "flash": pop_flash(request),
+            "player": detail,
+        },
+    )
+
+
 @app.get("/logs/battlepass", response_class=HTMLResponse)
 def battlepass_logs_page(
     request: Request,

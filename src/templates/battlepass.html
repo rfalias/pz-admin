@@ -50,7 +50,7 @@
     {% for p in leaderboard.players %}
     <tr>
       <td class="{% if p.rank == 1 %}bp-rank-1{% elif p.rank == 2 %}bp-rank-2{% elif p.rank == 3 %}bp-rank-3{% endif %}">{{ p.rank }}</td>
-      <td class="wrap-cell">{{ p.username }}</td>
+      <td class="wrap-cell"><a href="/battlepass/player/{{ p.username|urlencode }}">{{ p.username }}</a></td>
       <td><strong>{{ p.lifetime_earned }}</strong></td>
       <td>{{ p.balance }}</td>
       <td>

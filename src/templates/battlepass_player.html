@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="/battlepass">&larr; Back to leaderboard</a></p>
+
+<div class="bp-season-header">
+  <div>
+    <strong>{{ player.username }}</strong>
+    <p class="help">Balance: {{ player.balance }} &middot; Lifetime earned: {{ player.lifetime_earned }} &middot; Claimed items: {{ player.claimed_items_count }}</p>
+  </div>
+</div>
+
+<details class="group" open>
+  <summary>Feats ({{ player.feats|selectattr("completed")|list|length }}/{{ player.feats|length }})</summary>
+  <div class="group-body">
+    {% if not player.feats %}
+    <p class="empty">No feat definitions found.</p>
+    {% else %}
+    <div class="table-scroll">
+    <table class="stats-table">
+      <thead>
+        <tr><th>Feat</th><th>Type</th><th>Threshold</th><th>Reward</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for f in player.feats %}
+        <tr>
+          <td class="wrap-cell">{{ f.id }}</td>
+          <td>{{ f.type }}</td>
+          <td>{{ f.threshold }}</td>
+          <td>{{ f.reward }}</td>
+          <td><span class="settings-badge {{ 'settings-badge-active' if f.completed else 'settings-badge-disabled' }}">{{ "Completed" if f.completed else "Incomplete" }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </div>
+</details>
+
+<details class="group">
+  <summary>Quests</summary>
+  <div class="group-body">
+    {% if not player.quests_by_category %}
+    <p class="empty">No quest definitions found.</p>
+    {% endif %}
+    {% for cat in player.quests_by_category %}
+    <details class="group">
+      <summary>{{ cat.category }} ({{ cat.completed_count }}/{{ cat.total_count }})</summary>
+      <div class="group-body">
+        <div class="table-scroll">
+        <table class="stats-table">
+          <thead>
+            <tr><th>Quest</th><th>Recipe</th><th>Difficulty</th><th>Qty</th><th>Reward</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for q in cat.quests %}
+            <tr>
+              <td class="wrap-cell">{{ q.displayName or q.id }}</td>
+              <td>{{ q.recipeName or "" }}</td>
+              <td>{{ q.difficulty or "" }}</td>
+              <td>{{ q.quantity }}</td>
+              <td>{{ q.reward }}</td>
+              <td><span class="settings-badge {{ 'settings-badge-active' if q.completed else 'settings-badge-disabled' }}">{{ "Completed" if q.completed else "Incomplete" }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</details>
+
+<details class="group">
+  <summary>Tiers ({{ player.tiers|selectattr("completed")|list|length }}/{{ player.tiers|length }})</summary>
+  <div class="group-body">
+    {% if not player.tiers %}
+    <p class="empty">No tier definitions found.</p>
+    {% endif %}
+    {% for t in player.tiers %}
+    <details class="group">
+      <summary>
+        Tier {{ t.order }}{% if t.flavorText %} &mdash; {{ t.flavorText }}{% endif %}
+        <span class="settings-badge {{ 'settings-badge-active' if t.completed else 'settings-badge-disabled' }}">{{ "Completed" if t.completed else "Incomplete" }}</span>
+      </summary>
+      <div class="group-body">
+        {% if t.bonusItemDisplayName %}
+        <p class="help">Bonus: {{ t.bonusItemDisplayName }} ({{ t.bonusItemFullType }}) &middot; {{ t.bonusReward }} pts</p>
+        {% endif %}
+        <div class="table-scroll">
+        <table class="stats-table">
+          <thead>
+            <tr><th>Item</th><th>Type</th><th>Cost</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for item in t.tier_items %}
+            <tr>
+              <td class="wrap-cell">{{ item.displayName }}</td>
+              <td>{{ item.fullType }}</td>
+              <td>{{ item.cost }}</td>
+              <td><span class="settings-badge {{ 'settings-badge-active' if item.claimed else 'settings-badge-disabled' }}">{{ "Claimed" if item.claimed else "Unclaimed" }}</span></td>
+            </tr>
+            {% endfor %}
+            {% if not t.tier_items %}
+            <tr><td colspan="4" class="empty">No items in this tier.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</details>
+
+<details class="group" open>
+  <summary>Lifetime Stats</summary>
+  <div class="group-body">
+    <div class="bp-fields">
+      {% for k, v in player.lifetime_stats.items() %}
+      <span class="bp-kv"><span class="bp-key">{{ k }}=</span><span class="bp-val">{{ v }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+
+{% for section in [
+  ("Crafting counts by recipe", player.craft_counts),
+  ("Farming counts by type", player.farm_counts),
+  ("Fishing counts by type", player.fish_counts),
+  ("Vehicle mechanic counts by type", player.vehicle_counts),
+] %}
+{% if section[1] %}
+<details class="group">
+  <summary>{{ section[0] }}</summary>
+  <div class="group-body">
+    <div class="bp-fields">
+      {% for e in section[1] %}
+      <span class="bp-kv"><span class="bp-key">{{ e.name }}=</span><span class="bp-val">{{ e.count }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endif %}
+{% endfor %}
+
+<details class="group">
+  <summary>Skill Levels</summary>
+  <div class="group-body">
+    <div class="bp-fields">
+      {% for name, lvl in player.skill_levels %}
+      <span class="bp-kv"><span class="bp-key">{{ name }}=</span><span class="bp-val">{{ lvl }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endblock %}
