@@ -53,4 +53,5 @@
 
   refreshStatus();
   setInterval(refreshStatus, 15000);
+  window.refreshStatus = refreshStatus;
 })();

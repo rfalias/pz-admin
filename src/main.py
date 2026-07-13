@@ -880,16 +880,16 @@ async def wipe_server(request: Request, user: User | None = Depends(current_user
 @app.post("/restart")
 async def restart_server(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
-        return RedirectResponse("/dashboard", status_code=303)
+        return JSONResponse({"message": None, "error": "Not logged in."}, status_code=401)
     try:
         status = await asyncio.to_thread(docker_control.restart_pz_container)
-        request.session["flash"] = f"Restart signal sent to '{PZ_CONTAINER_NAME}' (status: {status})."
         await _audit(request, "restart", user.username)
+        return JSONResponse(
+            {"message": f"Restart signal sent to '{PZ_CONTAINER_NAME}' (status: {status}).", "error": None}
+        )
     except Exception as exc:
-        request.session["flash"] = f"Failed to restart '{PZ_CONTAINER_NAME}': {exc}"
         await _audit(request, "restart", user.username, detail=str(exc), success=False)
-    referer = request.headers.get("referer", "/server")
-    return RedirectResponse(referer, status_code=303)
+        return JSONResponse({"message": None, "error": str(exc)})
 
 
 def _require_admin(request: Request, user: User | None) -> RedirectResponse | None:

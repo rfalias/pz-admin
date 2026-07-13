@@ -31,18 +31,17 @@
       <form method="post" action="/rcon/save">
         <button type="submit" class="save-server-btn">Save World</button>
       </form>
-      <form method="post" action="/restart"
-            onsubmit="return confirm('Restart the {{ container }} container now? Players will be disconnected.');">
-        <button type="submit" class="restart-btn">Restart Server</button>
-      </form>
+      <button type="button" class="restart-btn" id="restart-btn" data-container="{{ container }}">Restart Server</button>
       <span class="user">{{ user }}</span>
       <a href="/logout">Logout</a>
     </div>
   </header>
 
-  {% if flash %}
-  <div class="flash">{{ flash }}</div>
-  {% endif %}
+  <div id="flash-banner">
+    {% if flash %}
+    <div class="flash">{{ flash }}</div>
+    {% endif %}
+  </div>
 
   <main class="{{ 'main-wide' if active in ['stats', 'battlepass', 'audit', 'playershops'] else '' }}">
     {% block content %}{% endblock %}
@@ -50,5 +49,6 @@
 
   <script src="/static/filter.js?v={{ static_version }}" defer></script>
   <script src="/static/status.js?v={{ static_version }}" defer></script>
+  <script src="/static/restart.js?v={{ static_version }}" defer></script>
 </body>
 </html>

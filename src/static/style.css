@@ -432,6 +432,10 @@ main.main-wide {
   font-size: 0.9rem;
 }
 
+.flash.flash-error {
+  background: var(--danger);
+}
+
 .settings-grid {
   display: grid;
   gap: 0.9rem;
