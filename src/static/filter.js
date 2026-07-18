@@ -28,9 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
         (field) => field.style.display !== "none"
       );
       group.style.display = hasVisibleField ? "" : "none";
-      if (query && hasVisibleField) {
-        group.open = true;
-      }
+      group.open = query ? hasVisibleField : false;
     });
   }
 

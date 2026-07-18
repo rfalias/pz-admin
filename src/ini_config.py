@@ -47,6 +47,114 @@ def parse_ini(path: Path) -> list[dict]:
     return entries
 
 
+# Curated display categories for Server.ini keys. This is a hand-built
+# taxonomy (there's no shipped vanilla equivalent of the `page = X` metadata
+# mods put in their sandbox-options.txt) - order here is the display order.
+# Any key not listed here falls into the trailing "Other" category so a
+# future game update that adds new ini keys never makes them disappear.
+CATEGORIES: list[tuple[str, list[str]]] = [
+    ("General & Chat", [
+        "PauseEmpty", "GlobalChat", "ChatStreams", "DisplayUserName",
+        "ShowFirstAndLastName", "UsernameDisguises", "HideDisguisedUserName",
+        "SwitchZombiesOwnershipEachUpdate", "MouseOverToSeeDisplayName",
+        "HidePlayersBehindYou", "MultiplayerStatisticsPeriod",
+        "DisableScoreboard", "HideAdminsInPlayerList", "SteamScoreboard",
+        "Seed", "ChatMessageCharacterLimit", "ChatMessageSlowModeTime",
+        "MapRemotePlayerVisibility",
+    ]),
+    ("Whitelist & Accounts", [
+        "Open", "ServerWelcomeMessage", "MaxAccountsPerUser",
+        "AllowNonAsciiUsername", "DropOffWhiteListAfterDeath", "Password",
+    ]),
+    ("PVP & Safety", [
+        "PVP", "PVPLogToolChat", "PVPLogToolFile", "SafetySystem",
+        "ShowSafety", "SafetyToggleTimer", "SafetyCooldownTimer",
+        "SafetyDisconnectDelay", "PVPMeleeWhileHitReaction",
+        "PVPMeleeDamageModifier", "PVPFirearmDamageModifier", "War",
+        "WarStartDelay", "WarDuration", "WarSafehouseHitPoints",
+        "PlayerBumpPlayer", "CarEngineAttractionModifier",
+        "UsePhysicsHitReaction",
+    ]),
+    ("Spawning & Characters", [
+        "SpawnPoint", "SpawnItems", "PlayerRespawnWithSelf",
+        "PlayerRespawnWithOther", "AnnounceDeath", "AnnounceAnimalDeath",
+        "RemovePlayerCorpsesOnCorpseRemoval", "BloodSplatLifespanDays",
+        "SleepAllowed", "SleepNeeded", "KnockedDownAllowed",
+        "SneakModeHideFromOtherPlayers", "UltraSpeedDoesnotAffectToAnimals",
+        "AllowCoop",
+    ]),
+    ("Safehouses", [
+        "PlayerSafehouse", "AdminSafehouse", "SafehouseAllowTrepass",
+        "SafehouseAllowFire", "SafehouseAllowLoot", "SafehouseAllowRespawn",
+        "SafehouseDaySurvivedToClaim", "SafeHouseRemovalTime",
+        "SafehouseAllowNonResidential", "SafehouseDisableDisguises",
+        "MaxSafezoneSize", "SafehousePreventsLootRespawn",
+        "DisableSafehouseWhenOwnerConnected", "AllowDestructionBySledgehammer",
+        "SledgehammerOnlyInSafehouse",
+    ]),
+    ("Factions", [
+        "Faction", "FactionDaySurvivedToCreate", "FactionPlayersRequiredForTag",
+    ]),
+    ("Map & World", [
+        "Map", "DoLuaChecksum", "SaveWorldEveryMinutes", "NoFire",
+        "TrashDeleteAll", "ItemNumbersLimitPerContainer", "FastForwardMultiplier",
+    ]),
+    ("Mods & Workshop", ["Mods", "WorkshopItems"]),
+    ("Server Browser & Steam", [
+        "Public", "PublicName", "PublicDescription", "MaxPlayers",
+        "PingLimit", "SteamVAC", "DenyLoginOnOverloadedServer",
+    ]),
+    ("Network & Connection", [
+        "DefaultPort", "UDPPort", "ResetID", "ServerPlayerID", "RCONPort",
+        "RCONPassword", "UPnP", "SpeedLimit", "LoginQueueEnabled",
+        "LoginQueueConnectTimeout", "server_browser_announced_ip",
+        "MaxPacketsPerSecond",
+    ]),
+    ("Voice Chat", ["VoiceEnable", "VoiceMinDistance", "VoiceMaxDistance", "Voice3D"]),
+    ("Discord Integration", [
+        "DiscordEnable", "DiscordToken", "DiscordChatChannel",
+        "DiscordLogChannel", "DiscordCommandChannel", "WebhookAddress",
+    ]),
+    ("Radio & Moderation", [
+        "DisableRadioStaff", "DisableRadioAdmin", "DisableRadioGM",
+        "DisableRadioOverseer", "DisableRadioModerator", "DisableRadioInvisible",
+        "ClientCommandFilter", "ClientActionLogs", "PerkLogs",
+        "BadWordListFile", "GoodWordListFile", "BadWordPolicy",
+        "BadWordReplacement", "BanKickGlobalSound",
+    ]),
+    ("Backups", ["BackupsCount", "BackupsOnStart", "BackupsOnVersionChange", "BackupsPeriod"]),
+    ("Vehicles", ["DisableVehicleTowing", "DisableTrailerTowing", "DisableBurntTowing"]),
+    ("Anti-Cheat", [
+        "AntiCheatSafety", "AntiCheatMovement", "AntiCheatHit",
+        "AntiCheatPacket", "AntiCheatPermission", "AntiCheatXP",
+        "AntiCheatSafeHouse", "AntiCheatPlayer", "AntiCheatChecksum",
+        "AntiCheatItem",
+    ]),
+]
+
+
+def categorize(entries: list[dict]) -> list[dict]:
+    """Group entries into display categories for server.html.
+
+    Purely a rendering concern: entries keep their original dicts, just
+    bucketed. Any key not covered by CATEGORIES lands in a trailing "Other"
+    category so new ini keys from a future game update stay visible instead
+    of silently vanishing from the page.
+    """
+    by_key = {e["key"]: e for e in entries}
+    used: set[str] = set()
+    groups = []
+    for name, keys in CATEGORIES:
+        group_entries = [by_key[k] for k in keys if k in by_key]
+        used.update(k for k in keys if k in by_key)
+        if group_entries:
+            groups.append({"name": name, "entries": group_entries})
+    leftover = [e for e in entries if e["key"] not in used]
+    if leftover:
+        groups.append({"name": "Other", "entries": leftover})
+    return groups
+
+
 def get_value(entries: list[dict], key: str, default: str = "") -> str:
     entry = next((e for e in entries if e["key"] == key), None)
     return entry["value"] if entry else default
@@ -83,6 +191,17 @@ def write_ini(path: Path, entries: list[dict]) -> None:
         lines.append(f"{entry['key']}={entry['value']}")
         lines.append("")
     path.write_text("\n".join(lines).rstrip("\n") + "\n")
+
+
+def diff_entries(old_entries: list[dict], new_entries: list[dict]) -> list[str]:
+    """Return one 'key: old -> new' string per changed value, for audit logging."""
+    old_values = {e["key"]: e["value"] for e in old_entries}
+    diffs = []
+    for entry in new_entries:
+        old_value = old_values.get(entry["key"], "")
+        if entry["value"] != old_value:
+            diffs.append(f"{entry['key']}: {old_value!r} -> {entry['value']!r}")
+    return diffs
 
 
 def apply_form(entries: list[dict], form: dict, managed_keys: set[str] | None = None) -> None:

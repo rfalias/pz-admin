@@ -6,6 +6,7 @@
   COMMANDS.forEach(function (c) { byName[c.name] = c; });
 
   var select = document.getElementById("command-select");
+  var search = document.getElementById("command-search");
   var description = document.getElementById("command-description");
   var fieldsContainer = document.getElementById("param-fields");
   var preview = document.getElementById("command-preview");
@@ -15,13 +16,42 @@
   var resultOutput = document.getElementById("result-output");
   var historyList = document.getElementById("history-list");
   var historyEmpty = document.getElementById("history-empty");
+  var itemsDatalist = document.getElementById("items-datalist");
+  var itemsByLabel = {};
+
+  if (window.ItemsDatalist && itemsDatalist) {
+    ItemsDatalist.populate(itemsDatalist, function (data) {
+      itemsByLabel = data.byLabel;
+    });
+  }
 
   COMMANDS.forEach(function (c) {
     var opt = document.createElement("option");
     opt.value = c.name;
     opt.textContent = c.name;
+    opt.dataset.searchText = (c.name + " " + (c.description || "")).toLowerCase();
     select.appendChild(opt);
   });
+
+  if (search) {
+    search.addEventListener("input", function () {
+      var query = search.value.trim().toLowerCase();
+      var options = Array.from(select.options);
+      var selectedHidden = false;
+      options.forEach(function (opt) {
+        var matches = !query || opt.dataset.searchText.indexOf(query) !== -1;
+        opt.hidden = !matches;
+        if (opt.selected && !matches) selectedHidden = true;
+      });
+      if (selectedHidden) {
+        var firstVisible = options.find(function (opt) { return !opt.hidden; });
+        if (firstVisible) {
+          select.value = firstVisible.value;
+          renderFields(byName[select.value]);
+        }
+      }
+    });
+  }
 
   function fieldId(param) {
     return "param-" + param.name;
@@ -107,6 +137,14 @@
         if (param.placeholder) ninp.placeholder = param.placeholder;
         ninp.addEventListener("input", updatePreview);
         wrapper.appendChild(ninp);
+      } else if (param.type === "item") {
+        var iinp = document.createElement("input");
+        iinp.type = "text";
+        iinp.id = fieldId(param);
+        iinp.setAttribute("list", "items-datalist");
+        iinp.placeholder = param.placeholder || "Search items by name, or type module.item";
+        iinp.addEventListener("input", updatePreview);
+        wrapper.appendChild(iinp);
       } else {
         var tinp = document.createElement("input");
         tinp.type = "text";
@@ -149,6 +187,11 @@
 
       var value = el.value;
       if (value === "" || value === undefined) return;
+
+      if (param.type === "item") {
+        var matched = itemsByLabel[value];
+        if (matched) value = matched.fullType;
+      }
 
       if (param.type === "bool_flag") {
         parts.push("-" + value);

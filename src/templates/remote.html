@@ -3,12 +3,14 @@
 <p class="help">Run RCON commands directly against the server. Build a command below, or edit the preview text directly before running.</p>
 
 <div class="field">
-  <label for="command-select">Command</label>
+  <label for="command-search">Command</label>
+  <input type="search" id="command-search" placeholder="Search commands by name or description..." autocomplete="off">
   <select id="command-select"></select>
   <p class="help" id="command-description"></p>
 </div>
 
 <div id="param-fields" class="settings-grid"></div>
+<datalist id="items-datalist"></datalist>
 
 <div class="field">
   <label for="command-preview">Command to run</label>
@@ -30,5 +32,6 @@
 </div>
 
 <script id="commands-data" type="application/json">{{ commands | tojson }}</script>
+<script src="/static/items_datalist.js?v={{ static_version }}" defer></script>
 <script src="/static/remote.js?v={{ static_version }}" defer></script>
 {% endblock %}

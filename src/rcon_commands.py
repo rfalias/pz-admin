@@ -14,6 +14,11 @@ folded into the final command string (see static/remote.js):
 - "flag_text": text input tied to a flag name, emits `flag "value"` if non-empty.
 - "select": dropdown from a fixed `options` list, unquoted.
 - "coords": three number inputs (x, y, z), joined as "x,y,z" with no spaces.
+- "item": text input with a searchable datalist of known PZ items (see
+  items_index.py / /shops/items-index.json), same lookup used by the Shops
+  stock editor. Selecting a suggestion resolves to its module.item id before
+  the command is built; typing an exact id directly (e.g. for an item not
+  yet in the index) still works unquoted, same as "text".
 
 A param is omitted entirely from the built command if it's not required and
 left blank - PZ commands generally treat a missing optional arg as "use the
@@ -35,7 +40,7 @@ COMMANDS = [
         "name": "additem", "description": "Give an item to a player (yourself if no username given).",
         "params": [
             {"name": "username", "label": "Username", "type": "text", "quoted": True},
-            {"name": "item", "label": "Item (module.item)", "type": "text", "required": True, "placeholder": "Base.Axe"},
+            {"name": "item", "label": "Item", "type": "item", "required": True, "placeholder": "Base.Axe"},
             {"name": "count", "label": "Count", "type": "number"},
         ],
     },
@@ -195,7 +200,7 @@ COMMANDS = [
     {
         "name": "removeitem", "description": "Remove items from yourself.",
         "params": [
-            {"name": "item", "label": "Item (module.item)", "type": "text", "required": True, "placeholder": "Base.Axe"},
+            {"name": "item", "label": "Item", "type": "item", "required": True, "placeholder": "Base.Axe"},
             {"name": "count", "label": "Count (0 = all)", "type": "number"},
         ],
     },

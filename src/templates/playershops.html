@@ -14,6 +14,10 @@
   </label>
 </form>
 
+<div class="search-bar">
+  <input type="search" id="playershops-search" placeholder="Search transactions..." autocomplete="off">
+</div>
+
 <div class="category-filters">
   {% for key, label in all_types.items() %}
   <label class="category-chip">
@@ -50,7 +54,7 @@
       <td>{{ e.quantity }}</td>
       <td>{{ e.unitPrice }}</td>
       <td><strong>{{ e.totalPrice }}</strong></td>
-      <td class="mono">{{ e.x }}, {{ e.y }}, {{ e.z }}</td>
+      <td class="mono"><a href="https://map.projectzomboid.com/?{{ e.x }}x{{ e.y }}x14" class="map-link" data-x="{{ e.x }}" data-y="{{ e.y }}" target="_blank" rel="noopener">{{ e.x }}, {{ e.y }}, {{ e.z }}</a></td>
     </tr>
     {% endfor %}
     {% if not entries %}
@@ -64,10 +68,19 @@
   var tbody = document.getElementById("playershops-tbody");
   var linesInput = document.getElementById("lines");
   var autoRefresh = document.getElementById("auto-refresh");
+  var playershopsSearch = document.getElementById("playershops-search");
   var refreshTimer = null;
 
   function isScrolledToTop() {
     return window.scrollY < 50;
+  }
+
+  function applyTextFilter() {
+    var query = playershopsSearch ? playershopsSearch.value.trim().toLowerCase() : "";
+    Array.from(tbody.querySelectorAll("tr")).forEach(function (row) {
+      var matches = !query || row.textContent.toLowerCase().indexOf(query) !== -1;
+      row.style.display = matches ? "" : "none";
+    });
   }
 
   function selectedTypes() {
@@ -108,9 +121,11 @@
         "<td>" + escapeHtml(String(e.quantity)) + "</td>" +
         "<td>" + escapeHtml(String(e.unitPrice)) + "</td>" +
         "<td><strong>" + escapeHtml(String(e.totalPrice)) + "</strong></td>" +
-        "<td class=\"mono\">" + escapeHtml(e.x + ", " + e.y + ", " + e.z) + "</td></tr>";
+        "<td class=\"mono\"><a href=\"https://map.projectzomboid.com/?" + e.x + "x" + e.y + "x14\" class=\"map-link\" data-x=\"" + e.x + "\" data-y=\"" + e.y + "\" target=\"_blank\" rel=\"noopener\">" +
+        escapeHtml(e.x + ", " + e.y + ", " + e.z) + "</a></td></tr>";
     });
     tbody.innerHTML = html;
+    if (window.MapPreview) MapPreview.bindStaticLinks("#playershops-tbody a.map-link");
   }
 
   function refreshTransactions() {
@@ -125,6 +140,7 @@
         if (entries === null) return;
         renderRows(entries);
         formatLocalTimes();
+        applyTextFilter();
         if (stickToTop) window.scrollTo(0, 0);
       });
   }
@@ -139,6 +155,13 @@
   }
 
   formatLocalTimes();
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.MapPreview) MapPreview.bindStaticLinks("#playershops-tbody a.map-link");
+  });
+
+  if (playershopsSearch) {
+    playershopsSearch.addEventListener("input", applyTextFilter);
+  }
 
   if (autoRefresh) {
     autoRefresh.checked = localStorage.getItem("pzAdminPlayerShopsAutoRefresh") === "1";

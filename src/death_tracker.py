@@ -104,6 +104,23 @@ def get_death_counts(db_path: Path) -> dict:
         conn.close()
 
 
+def get_deaths_for_user(db_path: Path, username: str) -> list[dict]:
+    """Return this player's individual deaths, most recent first."""
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT username, x, y, z, pvp, occurred_at FROM deaths "
+            "WHERE username = ? COLLATE NOCASE ORDER BY occurred_at DESC",
+            (username,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def get_death_leaderboard(db_path: Path) -> list[dict]:
     """Return [{username, count}] sorted by most deaths first."""
     if not db_path.exists():

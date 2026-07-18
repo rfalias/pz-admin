@@ -1,6 +1,63 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="group">
+  <div class="group-summary-static">Environment Settings</div>
+  <div class="group-body">
+    <form method="post" action="/settings/environment" class="settings-add-form">
+      <div class="field">
+        <label for="env-container">Container name</label>
+        <input type="text" id="env-container" name="pz_container_name" value="{{ env_settings.PZ_CONTAINER_NAME }}" required autocomplete="off">
+        <p class="help">The Docker container the Restart/Stop/Start controls act on.</p>
+      </div>
+      <div class="field">
+        <label for="env-server-name">Server name</label>
+        <input type="text" id="env-server-name" name="server_name" value="{{ env_settings.SERVER_NAME }}" required autocomplete="off">
+        <p class="help">Drives Server/&lt;name&gt;.ini, &lt;name&gt;_SandboxVars.lua, and save data under the mounted config directory.</p>
+      </div>
+      <div class="field">
+        <label for="env-rcon-host">RCON host</label>
+        <input type="text" id="env-rcon-host" name="rcon_host" value="{{ env_settings.RCON_HOST }}" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="env-rcon-port">RCON port</label>
+        <input type="text" id="env-rcon-port" name="rcon_port" value="{{ env_settings.RCON_PORT }}" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="env-rcon-password">RCON password</label>
+        <input type="password" id="env-rcon-password" name="rcon_password" placeholder="leave blank to keep current" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="env-connect-host">Public connect address</label>
+        <input type="text" id="env-connect-host" name="connect_host" value="{{ env_settings.CONNECT_HOST }}" autocomplete="off">
+        <p class="help">Shown to players as the address to connect to.</p>
+      </div>
+      <div class="field">
+        <label for="env-death-interval">Death log scan interval (seconds)</label>
+        <input type="text" id="env-death-interval" name="death_scan_interval_seconds" value="{{ env_settings.DEATH_SCAN_INTERVAL_SECONDS }}" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="env-mod-titles-interval">Workshop title refresh interval (seconds)</label>
+        <input type="text" id="env-mod-titles-interval" name="mod_titles_refresh_interval_seconds" value="{{ env_settings.MOD_TITLES_REFRESH_INTERVAL_SECONDS }}" required autocomplete="off">
+      </div>
+      <button type="submit" class="save-btn">Save environment settings</button>
+    </form>
+
+    <p class="help" style="margin-top: 0.9rem;"><strong>Paths (read-only, fixed by Docker volume mounts):</strong></p>
+    <p class="config-path">Config directory: {{ paths.CONFIG_DIR }}</p>
+    <p class="config-path">App data directory: {{ paths.APP_DATA_DIR }}</p>
+    <p class="config-path">Server ini: {{ paths.SERVER_INI_PATH }}</p>
+    <p class="config-path">Sandbox lua: {{ paths.SANDBOX_LUA_PATH }}</p>
+    <p class="config-path">Player database: {{ paths.PLAYER_DB_PATH }}</p>
+    <p class="config-path">Save database: {{ paths.SAVE_DB_PATH }}</p>
+    <p class="config-path">Logs directory: {{ paths.LOGS_DIR }}</p>
+    <p class="config-path">Death log: {{ paths.DEATH_LOG_PATH }}</p>
+    <p class="config-path">Battle Pass data: {{ paths.BATTLEPASS_DATA_PATH }}</p>
+    <p class="config-path">Dynamic spawnpoints: {{ paths.SPAWNPOINTS_PATH }}</p>
+    <p class="config-path">Player Shops log: {{ paths.PLAYERSHOPS_LOG_PATH }}</p>
+  </div>
+</div>
+
+<div class="group">
   <div class="group-summary-static">Add user</div>
   <div class="group-body">
     <form method="post" action="/settings/users" class="settings-add-form">

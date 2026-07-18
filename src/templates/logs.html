@@ -15,6 +15,10 @@
   </label>
 </form>
 
+<div class="search-bar">
+  <input type="search" id="log-search" placeholder="Search log messages..." autocomplete="off">
+</div>
+
 <div class="category-filters">
   {% for key, label in all_categories.items() %}
   <label class="category-chip">
@@ -25,6 +29,7 @@
   {% endfor %}
 </div>
 
+<div class="table-scroll">
 <table class="stats-table log-table">
   <thead>
     <tr>
@@ -46,15 +51,25 @@
     {% endif %}
   </tbody>
 </table>
+</div>
 
 <script>
   var tbody = document.getElementById("log-tbody");
   var linesInput = document.getElementById("lines");
   var autoRefresh = document.getElementById("auto-refresh");
+  var logSearch = document.getElementById("log-search");
   var refreshTimer = null;
 
   function isScrolledToTop() {
     return window.scrollY < 50;
+  }
+
+  function applyTextFilter() {
+    var query = logSearch ? logSearch.value.trim().toLowerCase() : "";
+    Array.from(tbody.querySelectorAll("tr")).forEach(function (row) {
+      var matches = !query || row.textContent.toLowerCase().indexOf(query) !== -1;
+      row.style.display = matches ? "" : "none";
+    });
   }
 
   function selectedCategories() {
@@ -94,6 +109,7 @@
       .then(function (entries) {
         if (entries === null) return;
         renderRows(entries);
+        applyTextFilter();
         if (stickToTop) window.scrollTo(0, 0);
       });
   }
@@ -120,5 +136,9 @@
       document.getElementById("logs-form").requestSubmit();
     });
   });
+
+  if (logSearch) {
+    logSearch.addEventListener("input", applyTextFilter);
+  }
 </script>
 {% endblock %}

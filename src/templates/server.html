@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<p class="config-path">{{ config_path }}</p>
+<p class="config-path">{{ config_path }} &middot; <a href="/server/versions">Versions</a></p>
 {% if not entries %}
 <p class="empty">No settings found. Check that CONFIG_DIR and SERVER_NAME point at a valid server config.</p>
 {% else %}
@@ -8,22 +8,27 @@
   <input type="search" id="settings-search" placeholder="Search settings by name, description, or value..." autocomplete="off">
 </div>
 <form method="post" action="/server">
-  <div class="settings-grid">
-    {% for e in entries %}
-    <div class="field">
-      <label for="srv-{{ e.key }}">{{ e.key }}</label>
-      {% if e.is_bool %}
-      <input type="checkbox" id="srv-{{ e.key }}" name="{{ e.key }}" {% if e.value.strip().lower() == 'true' %}checked{% endif %}>
-      {% else %}
-      <input type="text" id="srv-{{ e.key }}" name="{{ e.key }}" value="{{ e.value }}">
+  {% for cat in categories %}
+  <details class="group">
+    <summary>{{ cat.name }}</summary>
+    <div class="group-body settings-grid">
+      {% for e in cat.entries %}
+      <div class="field">
+        <label for="srv-{{ e.key }}">{{ e.key }}</label>
+        {% if e.is_bool %}
+        <input type="checkbox" id="srv-{{ e.key }}" name="{{ e.key }}" {% if e.value.strip().lower() == 'true' %}checked{% endif %}>
+        {% else %}
+        <input type="text" id="srv-{{ e.key }}" name="{{ e.key }}" value="{{ e.value }}">
+        {% endif %}
+        {% if e.comment %}<p class="help">{{ e.comment }}</p>{% endif %}
+      </div>
+      {% if e.key == 'WorkshopItems' and mods_warning %}
+      <p class="warning">{{ mods_warning }}</p>
       {% endif %}
-      {% if e.comment %}<p class="help">{{ e.comment }}</p>{% endif %}
+      {% endfor %}
     </div>
-    {% if e.key == 'WorkshopItems' and mods_warning %}
-    <p class="warning">{{ mods_warning }}</p>
-    {% endif %}
-    {% endfor %}
-  </div>
+  </details>
+  {% endfor %}
   <div class="save-bar">
     <button type="submit" class="save-btn">Save Server Settings</button>
   </div>

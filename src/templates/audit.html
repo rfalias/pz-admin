@@ -12,6 +12,10 @@
   </label>
 </form>
 
+<div class="search-bar">
+  <input type="search" id="audit-search" placeholder="Search audit entries..." autocomplete="off">
+</div>
+
 <div class="category-filters">
   {% for key, label in all_actions.items() %}
   <label class="category-chip">
@@ -56,10 +60,19 @@
   var tbody = document.getElementById("audit-tbody");
   var limitInput = document.getElementById("limit");
   var autoRefresh = document.getElementById("auto-refresh");
+  var auditSearch = document.getElementById("audit-search");
   var refreshTimer = null;
 
   function isScrolledToTop() {
     return window.scrollY < 50;
+  }
+
+  function applyTextFilter() {
+    var query = auditSearch ? auditSearch.value.trim().toLowerCase() : "";
+    Array.from(tbody.querySelectorAll("tr")).forEach(function (row) {
+      var matches = !query || row.textContent.toLowerCase().indexOf(query) !== -1;
+      row.style.display = matches ? "" : "none";
+    });
   }
 
   function selectedActions() {
@@ -115,6 +128,7 @@
         if (entries === null) return;
         renderRows(entries);
         formatLocalTimes();
+        applyTextFilter();
         if (stickToTop) window.scrollTo(0, 0);
       });
   }
@@ -129,6 +143,10 @@
   }
 
   formatLocalTimes();
+
+  if (auditSearch) {
+    auditSearch.addEventListener("input", applyTextFilter);
+  }
 
   if (autoRefresh) {
     autoRefresh.checked = localStorage.getItem("pzAdminAuditAutoRefresh") === "1";

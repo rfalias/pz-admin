@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<p class="config-path">{{ config_path }}</p>
+<p class="config-path">{{ config_path }} &middot; <a href="/sandbox/versions">Versions</a></p>
 {% if not entries %}
 <p class="empty">No settings found. Check that CONFIG_DIR and SERVER_NAME point at a valid server config.</p>
 {% else %}
@@ -12,7 +12,7 @@
     {% for item in items %}
       {% set path = prefix ~ item.key %}
       {% if item.type == 'table' %}
-        <details class="group" open>
+        <details class="group">
           <summary>{{ item.key }}</summary>
           <div class="group-body">
             {{ render_items(item.children, path ~ '.') }}
@@ -31,7 +31,15 @@
       {% endif %}
     {% endfor %}
   {% endmacro %}
-  {{ render_items(entries, "") }}
+  {% for cat in leaf_categories %}
+  <details class="group">
+    <summary>{{ cat.name }}</summary>
+    <div class="group-body">
+      {{ render_items(cat.settings, "") }}
+    </div>
+  </details>
+  {% endfor %}
+  {{ render_items(tables, "") }}
   <div class="save-bar">
     <button type="submit" class="save-btn">Save Sandbox Settings</button>
   </div>
