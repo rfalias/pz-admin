@@ -18,6 +18,7 @@
     nameCell.appendChild(nameInput);
     tr.appendChild(nameCell);
 
+    var coordInputs = {};
     ["x", "y", "z"].forEach(function (field) {
       var cell = document.createElement("td");
       var input = document.createElement("input");
@@ -26,6 +27,16 @@
       input.step = "1";
       input.value = "0";
       cell.appendChild(input);
+      coordInputs[field] = input;
+      if (field === "z") {
+        var previewBtn = document.createElement("button");
+        previewBtn.type = "button";
+        previewBtn.className = "coord-preview-btn";
+        previewBtn.setAttribute("aria-label", "Preview location");
+        previewBtn.textContent = "🗺";
+        cell.appendChild(previewBtn);
+        if (window.MapPreview) MapPreview.bindInputs(previewBtn, coordInputs.x, coordInputs.y, coordInputs.z);
+      }
       tr.appendChild(cell);
     });
 
@@ -73,4 +84,17 @@
     var tr = addRow();
     tr.querySelector('[name="name"]').focus();
   });
+
+  if (window.MapPreview) {
+    tbody.querySelectorAll("tr").forEach(function (tr) {
+      var btn = tr.querySelector("[data-coord-preview]");
+      if (!btn) return;
+      MapPreview.bindInputs(
+        btn,
+        tr.querySelector('[name="x"]'),
+        tr.querySelector('[name="y"]'),
+        tr.querySelector('[name="z"]')
+      );
+    });
+  }
 })();

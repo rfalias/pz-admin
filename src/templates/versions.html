@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path"><a href="{{ back_url }}">&larr; Back to {{ page_label }}</a></p>
+
+<div class="group">
+  <div class="group-summary-static">Save current {{ page_label }} as a new version</div>
+  <div class="group-body">
+    <form method="post" action="/{{ page }}/versions/create" class="settings-add-form">
+      <div class="field">
+        <label for="version-name">Name</label>
+        <input type="text" id="version-name" name="name" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="version-description">Description (optional)</label>
+        <input type="text" id="version-description" name="description" autocomplete="off">
+      </div>
+      <button type="submit" class="save-btn">Save version</button>
+    </form>
+  </div>
+</div>
+
+{% if not versions %}
+<p class="empty">No versions saved yet.</p>
+{% else %}
+<div class="table-scroll">
+<table class="stats-table settings-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Description</th>
+      <th>Saved</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in versions %}
+    <tr>
+      <td class="wrap-cell">
+        {{ v.name }}{% if v.is_auto %} <span class="settings-badge">auto</span>{% endif %}
+      </td>
+      <td class="wrap-cell">{{ v.description or "" }}</td>
+      <td class="mono local-time" data-epoch="{{ v.created_epoch }}">{{ v.created_epoch }}</td>
+      <td>
+        <div class="row-actions">
+          <form method="post" action="/{{ page }}/versions/{{ v.id }}/apply" class="settings-inline-form"
+                onsubmit="return confirm('Apply version {{ v.name }}? This will overwrite the current {{ page_label }}. A backup of the current state will be saved first.');">
+            <button type="submit" class="settings-btn">Apply</button>
+          </form>
+          <form method="post" action="/{{ page }}/versions/{{ v.id }}/delete" class="settings-inline-form"
+                onsubmit="return confirm('Delete version {{ v.name }}?');">
+            <button type="submit" class="settings-btn settings-btn-danger">Delete</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<script>
+  document.querySelectorAll(".local-time[data-epoch]").forEach(function (el) {
+    var epoch = parseFloat(el.dataset.epoch);
+    if (!epoch) return;
+    el.textContent = new Date(epoch * 1000).toLocaleString();
+  });
+</script>
+{% endblock %}

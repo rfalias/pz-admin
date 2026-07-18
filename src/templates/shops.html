@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="config-path">{{ config_path }}</p>
+<p class="help">Admin-registered shops from the PlayerShops mod. Hover a shop's coordinates for a map preview, or click to open the full map. Add/remove items and edit prices below, then Save.</p>
+
+{% set shop_types = shops | map(attribute="type") | unique | list %}
+<div class="subtabs" id="shops-tabs">
+  <button type="button" class="subtab active" data-type="">All</button>
+  {% for t in shop_types %}
+  <button type="button" class="subtab" data-type="{{ t }}">{{ all_types.get(t, t) }}</button>
+  {% endfor %}
+</div>
+
+<div class="search-bar">
+  <input type="search" id="shops-search" placeholder="Search shops..." autocomplete="off">
+</div>
+
+<form method="post" action="/shops" id="shops-form">
+<div class="table-scroll">
+<table class="stats-table log-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Owner</th>
+      <th>Location</th>
+      <th>Coordinates</th>
+      <th>Items</th>
+    </tr>
+  </thead>
+  <tbody id="shops-tbody">
+    {% for s in shops %}
+    <tr data-type="{{ s.type }}">
+      <td>
+        <input type="hidden" name="id" value="{{ s.id }}">
+        <input type="hidden" name="type" value="{{ s.type }}">
+        <input type="hidden" name="x" value="{{ s.x }}">
+        <input type="hidden" name="y" value="{{ s.y }}">
+        <input type="hidden" name="z" value="{{ s.z }}">
+        <input type="hidden" name="location_id" value="{{ s.location_id }}">
+        <input type="hidden" name="reserved" value="{{ s.reserved }}">
+        <input type="hidden" name="name" value="{{ s.name }}">
+        <input type="hidden" name="owner" value="{{ s.owner }}">
+        {{ s.name }}
+      </td>
+      <td><span class="category-badge">{{ all_types.get(s.type, s.type) }}</span></td>
+      <td>{{ s.owner or "—" }}</td>
+      <td class="mono">{{ s.location_id }}</td>
+      <td class="mono"><a href="{{ s.map_url }}" class="map-link" data-x="{{ s.x }}" data-y="{{ s.y }}" target="_blank" rel="noopener">{{ s.x }}, {{ s.y }}, {{ s.z }}</a></td>
+      <td>
+        <details class="group stock-group">
+          <summary>{{ s.stock|length }} item{{ "s" if s.stock|length != 1 else "" }}</summary>
+          <div class="group-body stock-group-body">
+            <div class="stock-list">
+              {% for it in s.stock %}
+              <div class="stock-item" data-item="{{ it.item }}">
+                {% if it.icon_url %}
+                <img class="item-icon" src="{{ it.icon_url }}" alt="">
+                {% else %}
+                <span class="item-icon item-icon-blank"></span>
+                {% endif %}
+                <span class="item-name">{{ it.display_name }}</span>
+                <input type="number" min="0" step="1" class="item-price-input" value="{{ it.price }}">
+                <button type="button" class="item-remove-btn" aria-label="Remove item">×</button>
+              </div>
+              {% endfor %}
+            </div>
+            <input type="text" class="item-add-input" list="items-datalist" placeholder="Add item...">
+          </div>
+        </details>
+        <input type="hidden" name="stock_json" class="stock-json-field">
+      </td>
+    </tr>
+    {% endfor %}
+    {% if not shops %}
+    <tr><td colspan="6" class="empty">No shops found in the registry.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+</div>
+
+<datalist id="items-datalist"></datalist>
+
+<div class="save-bar">
+  <button type="submit" class="save-btn">Save Shops</button>
+</div>
+</form>
+
+<script>
+  var shopsSearch = document.getElementById("shops-search");
+  var shopsTbody = document.getElementById("shops-tbody");
+  var shopsTabs = document.getElementById("shops-tabs");
+  var activeType = "";
+
+  function applyShopsFilter() {
+    var query = shopsSearch ? shopsSearch.value.trim().toLowerCase() : "";
+    Array.from(shopsTbody.querySelectorAll("tr")).forEach(function (row) {
+      var typeMatches = !activeType || row.getAttribute("data-type") === activeType;
+      var textMatches = !query || row.textContent.toLowerCase().indexOf(query) !== -1;
+      row.style.display = typeMatches && textMatches ? "" : "none";
+    });
+  }
+
+  if (shopsSearch) {
+    shopsSearch.addEventListener("input", applyShopsFilter);
+  }
+
+  if (shopsTabs) {
+    shopsTabs.querySelectorAll(".subtab").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        shopsTabs.querySelectorAll(".subtab").forEach(function (t) { t.classList.remove("active"); });
+        tab.classList.add("active");
+        activeType = tab.getAttribute("data-type");
+        applyShopsFilter();
+      });
+    });
+  }
+
+</script>
+<script src="/static/items_datalist.js?v={{ static_version }}" defer></script>
+<script src="/static/shops.js?v={{ static_version }}" defer></script>
+{% endblock %}

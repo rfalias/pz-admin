@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="subtabs" id="spawnpoints-subtabs">
+  <button type="button" class="subtab active" data-tab="event-spawns">Event Spawns</button>
+  <button type="button" class="subtab" data-tab="trigger-zones">Trigger Zones</button>
+</div>
+
+<div id="tab-event-spawns" class="subtab-panel">
 <p class="config-path">{{ config_path }}</p>
 <p class="help">Event spawn points read by the DynamicSpawnPoints mod. A newly added point is live in the in-game spawn picker immediately, but only becomes a valid in-place respawn destination after the next server restart.</p>
 
 <form method="post" action="/spawnpoints" id="spawnpoints-form">
+  <div class="table-scroll">
   <table class="stats-table" id="spawnpoints-table">
     <thead>
       <tr>
@@ -25,7 +32,7 @@
         </td>
         <td><input type="number" name="x" value="{{ e.x }}" step="1"></td>
         <td><input type="number" name="y" value="{{ e.y }}" step="1"></td>
-        <td><input type="number" name="z" value="{{ e.z }}" step="1"></td>
+        <td><input type="number" name="z" value="{{ e.z }}" step="1"><button type="button" class="coord-preview-btn" data-coord-preview aria-label="Preview location">🗺</button></td>
         <td>
           <input type="hidden" name="created_by" value="{{ e.created_by }}">
           <span class="help">{{ e.created_by or "" }}</span>
@@ -40,6 +47,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 
   <button type="button" class="char-toggle" id="add-spawnpoint-btn">Add spawn point</button>
 
@@ -47,6 +55,79 @@
     <button type="submit" class="save-btn">Save Spawn Points</button>
   </div>
 </form>
+</div>
+
+<div id="tab-trigger-zones" class="subtab-panel" style="display: none;">
+<p class="config-path">{{ zones_config_path }}</p>
+<p class="help">Trigger zones read by the EventManager mod. Entering a zone (with its cooldown expired) rolls a zombie spawn across its spawn points. Radius {{ zone_limits.min_radius }}-{{ zone_limits.max_radius }} tiles, cooldown {{ zone_limits.min_cooldown_sec }}s minimum, up to {{ zone_limits.max_spawn_points_per_zone }} spawn points per zone, up to {{ zone_limits.max_zombies_per_spawn_point }} zombies per spawn point &mdash; matching the mod's own limits.</p>
+
+<form method="post" action="/spawnpoints/zones" id="zones-form">
+  <div id="zones-list">
+    {% for z in zones %}
+    <div class="zone-card" data-zone-card>
+      <input type="hidden" name="zone_id" value="{{ z.id }}">
+      <div class="zone-fields">
+        <label class="zone-field zone-field-name">Name
+          <input type="text" name="zone_name" value="{{ z.name }}" placeholder="Zone name">
+        </label>
+        <label class="zone-field">X
+          <input type="number" name="zone_x" value="{{ z.x }}" step="1">
+        </label>
+        <label class="zone-field">Y
+          <input type="number" name="zone_y" value="{{ z.y }}" step="1">
+        </label>
+        <label class="zone-field">Z
+          <input type="number" name="zone_z" value="{{ z.z }}" step="1">
+        </label>
+        <button type="button" class="coord-preview-btn" data-coord-preview aria-label="Preview location">🗺</button>
+        <label class="zone-field">Radius
+          <input type="number" name="zone_radius" value="{{ z.radius }}" min="{{ zone_limits.min_radius }}" max="{{ zone_limits.max_radius }}" step="1">
+        </label>
+        <label class="zone-field">Cooldown (s)
+          <input type="number" name="zone_cooldown_sec" value="{{ z.cooldown_sec }}" min="{{ zone_limits.min_cooldown_sec }}" step="1">
+        </label>
+        <label class="zone-field zone-field-outfit">Outfit (blank = random)
+          <input type="text" name="zone_outfit_name" value="{{ z.outfit_name }}" placeholder="e.g. ConstructionWorker">
+        </label>
+        <label class="zone-field zone-field-pct">Female %
+          <input type="number" name="zone_female_chance" value="{{ z.female_chance }}" min="0" max="100" step="1">
+        </label>
+        <label class="zone-field zone-field-pct">Sprinter %
+          <input type="number" name="zone_sprinter_chance" value="{{ z.sprinter_chance }}" min="0" max="100" step="1">
+        </label>
+        <button type="button" class="row-remove-btn zone-remove-btn">Remove zone</button>
+      </div>
+
+      <div class="zone-points-list" data-points-list>
+        {% for p in z.spawn_points %}
+        <div class="zone-point-row" data-point-row data-point-id="{{ p.id }}">
+          <label>X <input type="number" class="zp-x" value="{{ p.x }}" step="1"></label>
+          <label>Y <input type="number" class="zp-y" value="{{ p.y }}" step="1"></label>
+          <label>Z <input type="number" class="zp-z" value="{{ p.z }}" step="1"></label>
+          <button type="button" class="coord-preview-btn" data-coord-preview aria-label="Preview location">🗺</button>
+          <label>Zombies <input type="number" class="zp-count" value="{{ p.zombie_count }}" min="1" max="{{ zone_limits.max_zombies_per_spawn_point }}" step="1"></label>
+          <label>Jitter <input type="number" class="zp-jitter" value="{{ p.jitter_radius }}" min="0" step="1"></label>
+          <button type="button" class="item-remove-btn zone-point-remove-btn" aria-label="Remove spawn point">×</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="zone-point-add-btn" data-add-point>Add spawn point</button>
+      <input type="hidden" name="zone_spawn_points_json" class="zone-points-json-field">
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="button" class="char-toggle" id="add-zone-btn">Add trigger zone</button>
+
+  <div class="save-bar">
+    <button type="submit" class="save-btn">Save Trigger Zones</button>
+  </div>
+</form>
+</div>
 
 <script src="/static/spawnpoints.js?v={{ static_version }}" defer></script>
+<script>
+  window.EVENT_ZONE_LIMITS = {{ zone_limits | tojson }};
+</script>
+<script src="/static/event_zones.js?v={{ static_version }}" defer></script>
 {% endblock %}
