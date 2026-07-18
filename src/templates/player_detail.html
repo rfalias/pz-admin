@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<p><a href="/stats">&larr; Back to Players</a></p>
+
+<div class="bp-season-header">
+  <div>
+    <strong>{{ username }}</strong>
+    {% if character %}
+    <p class="help">{{ "Dead" if character.is_dead else "Alive" }} &middot; Steam ID: {{ character.steamid or "unknown" }}</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if character %}
+<details class="group" open>
+  <summary>Character</summary>
+  <div class="group-body">
+    <p class="help">Character data is reverse-engineered from the save file's binary format and may be incomplete or wrong &mdash; treat as best-effort.</p>
+    {% set c = character.character %}
+    <div class="char-grid">
+      <div>
+        {% if c %}
+        <strong>{{ (c.forename or "") + " " + (c.surname or "") }}</strong>
+        {% if c.nickname %}<span class="help">"{{ c.nickname }}"</span>{% endif %}
+        <p class="help">Profession: {{ c.profession or "unknown" }}{% if c.voice %} &middot; Voice: {{ c.voice }}{% endif %}</p>
+        {% if c.traits %}<p class="help">Traits: {{ c.traits|join(", ") }}</p>{% endif %}
+        {% endif %}
+        <p class="help">Last known save position: <a href="https://map.projectzomboid.com/?{{ character.x }}x{{ character.y }}x14" class="map-link" data-x="{{ character.x }}" data-y="{{ character.y }}" target="_blank" rel="noopener">{{ "%.0f"|format(character.x) }}, {{ "%.0f"|format(character.y) }}, {{ "%.0f"|format(character.z) }}</a></p>
+      </div>
+      {% if c and c.perk_levels %}
+      <table class="perk-table">
+        <thead><tr><th>Perk</th><th>Level</th><th>XP</th></tr></thead>
+        <tbody>
+          {% for perk, level in c.perk_levels.items() %}
+          <tr><td>{{ perk }}</td><td>{{ level }}</td><td>{{ c.perk_xp.get(perk, "") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </div>
+</details>
+{% endif %}
+
+<details class="group" open>
+  <summary>Deaths ({{ deaths|length }})</summary>
+  <div class="group-body">
+    {% if not deaths %}
+    <p class="empty">No recorded deaths.</p>
+    {% else %}
+    <div class="table-scroll">
+    <table class="stats-table">
+      <thead><tr><th>When</th><th>Location</th><th>PVP</th></tr></thead>
+      <tbody>
+        {% for d in deaths %}
+        <tr>
+          <td>{{ d.occurred_at }}</td>
+          <td class="mono">
+            {% if d.x is not none and d.y is not none %}
+            <a href="https://map.projectzomboid.com/?{{ d.x }}x{{ d.y }}x14" class="map-link" data-x="{{ d.x }}" data-y="{{ d.y }}" target="_blank" rel="noopener">{{ d.x }}, {{ d.y }}, {{ d.z }}</a>
+            {% else %}
+            &mdash;
+            {% endif %}
+          </td>
+          <td>{{ d.pvp or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </div>
+</details>
+
+<details class="group" {% if battlepass %}open{% endif %}>
+  <summary>Battle Pass</summary>
+  <div class="group-body">
+    {% if not battlepass %}
+    <p class="empty">No battle pass data found for this player.</p>
+    {% else %}
+    <p class="help">Balance: {{ battlepass.balance }} &middot; Lifetime earned: {{ battlepass.lifetime_earned }} &middot; Claimed items: {{ battlepass.claimed_items_count }} &middot; <a href="/battlepass/player/{{ username }}">Full battle pass detail &rarr;</a></p>
+    <div class="bp-fields">
+      {% for k, v in battlepass.lifetime_stats.items() %}
+      <span class="bp-kv"><span class="bp-key">{{ k }}=</span><span class="bp-val">{{ v }}</span></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</details>
+
+<details class="group" open>
+  <summary>Location History ({{ total_location_count }} total{% if filtered_location_count != total_location_count %}, {{ filtered_location_count }} in range{% endif %})</summary>
+  <div class="group-body">
+    {% if kill_tally %}
+    <p class="help">Zombie kills logged: <strong>{{ kill_tally.kills }}</strong> (as of <span class="local-time" data-epoch="{{ kill_tally.lastUpdated }}"></span>)</p>
+    {% endif %}
+    <form class="row-actions" onsubmit="return false;">
+      <label>From <input type="datetime-local" id="loc-start"></label>
+      <label>To <input type="datetime-local" id="loc-end"></label>
+      <button type="button" onclick="applyTimeframe()">Apply</button>
+      <button type="button" onclick="clearTimeframe()">Reset</button>
+    </form>
+
+    {% if total_location_count == 0 %}
+    <p class="empty">No location history recorded for this player.</p>
+    {% else %}
+    {% if map_config %}
+    <p class="help">Drag to pan, scroll or use +/&minus; to zoom. Newest position in red, older breadcrumbs in amber &mdash; hover a dot for its timestamp. Skull markers are deaths, zombie-head markers are kills (badged with a count when several happened close together), and item-icon markers are pickups (badged and grouped when several items were picked up in one spot) &mdash; click a marker for details.{% if trail_points_truncated %} Showing the most recent {{ max_trail_points }} of {{ filtered_location_count }} points in range.{% endif %}</p>
+    <div id="breadcrumb-map" class="breadcrumb-map"></div>
+    {% else %}
+    <p class="empty">Map preview unavailable (couldn't reach map.projectzomboid.com).</p>
+    {% endif %}
+
+    <div class="row-actions" style="margin-top: 0.5rem;">
+      <form method="post" action="/player/{{ username }}/clear-location" onsubmit="return confirm('Clear ALL location history for {{ username }}? This cannot be undone.');">
+        <button type="submit" class="settings-btn settings-btn-danger">Clear all history</button>
+      </form>
+      <form method="post" action="/player/{{ username }}/clear-location" onsubmit="return confirm('Clear location history for {{ username }} in the selected range only? This cannot be undone.');">
+        {% if start is not none %}<input type="hidden" name="start" value="{{ start }}">{% endif %}
+        {% if end is not none %}<input type="hidden" name="end" value="{{ end }}">{% endif %}
+        <button type="submit" class="settings-btn settings-btn-danger" {% if start is none and end is none %}disabled title="Select a timeframe above and click Apply first"{% endif %}>Clear shown range</button>
+      </form>
+    </div>
+
+    <details class="group" style="margin-top: 0.5rem;">
+      <summary>Raw entries ({{ locations|length }} shown)</summary>
+      <div class="group-body">
+        <div class="table-scroll">
+        <table class="stats-table">
+          <thead><tr><th>When</th><th>X</th><th>Y</th><th>Z</th><th>Event</th></tr></thead>
+          <tbody id="location-tbody">
+            {% for loc in locations %}
+            <tr>
+              <td class="local-time" data-epoch="{{ loc.lastUpdated }}"></td>
+              <td class="mono"><a href="https://map.projectzomboid.com/?{{ loc.x }}x{{ loc.y }}x14" class="map-link" data-x="{{ loc.x }}" data-y="{{ loc.y }}" target="_blank" rel="noopener">{{ loc.x }}</a></td>
+              <td class="mono">{{ loc.y }}</td>
+              <td class="mono">{{ loc.z }}</td>
+              <td>
+                {% if loc.action == "died" %}
+                <span class="category-badge badge-danger">Died</span>
+                {% elif loc.action == "killed_zombie" %}
+                <span class="category-badge">Killed zombie{% if loc.totalKills is not none %} (#{{ loc.totalKills }}){% endif %}</span>
+                {% elif loc.action == "picked_up" %}
+                <span class="stock-item" style="width:auto;">
+                  {% if loc.icon_url %}
+                  <img class="item-icon" src="{{ loc.icon_url }}" alt="">
+                  {% else %}
+                  <span class="item-icon item-icon-blank"></span>
+                  {% endif %}
+                  <span class="item-name" style="white-space:normal;">Picked up: {{ loc.display_name }}</span>
+                </span>
+                {% else %}
+                &mdash;
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        {% if filtered_location_count > 50 %}
+        <p class="help">Showing the most recent 50 of {{ filtered_location_count }} entries in range.</p>
+        {% endif %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</details>
+
+<script>
+  document.querySelectorAll(".local-time[data-epoch]").forEach(function (el) {
+    var epoch = parseFloat(el.dataset.epoch);
+    if (!epoch) return;
+    el.textContent = new Date(epoch * 1000).toLocaleString();
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.MapPreview) MapPreview.bindStaticLinks(".map-link");
+  });
+
+  (function () {
+    var startEpoch = {{ start if start is not none else 'null' }};
+    var endEpoch = {{ end if end is not none else 'null' }};
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function toLocalInputValue(epoch) {
+      var d = new Date(epoch * 1000);
+      return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+        "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    var startInput = document.getElementById("loc-start");
+    var endInput = document.getElementById("loc-end");
+    if (startEpoch && startInput) startInput.value = toLocalInputValue(startEpoch);
+    if (endEpoch && endInput) endInput.value = toLocalInputValue(endEpoch);
+  })();
+
+  function epochFromLocal(inputEl) {
+    if (!inputEl || !inputEl.value) return null;
+    return Math.floor(new Date(inputEl.value).getTime() / 1000);
+  }
+
+  function applyTimeframe() {
+    var start = epochFromLocal(document.getElementById("loc-start"));
+    var end = epochFromLocal(document.getElementById("loc-end"));
+    var url = new URL(window.location.href);
+    if (start) url.searchParams.set("start", start); else url.searchParams.delete("start");
+    if (end) url.searchParams.set("end", end); else url.searchParams.delete("end");
+    window.location.href = url.toString();
+  }
+
+  function clearTimeframe() {
+    var url = new URL(window.location.href);
+    url.searchParams.delete("start");
+    url.searchParams.delete("end");
+    window.location.href = url.toString();
+  }
+</script>
+
+{% if map_config %}
+<script>
+  (function () {
+    var mapConfig = {{ map_config_json | safe }};
+    var trailPoints = {{ trail_points_json | safe }};
+
+    var map = L.map("breadcrumb-map", {
+      crs: L.CRS.Simple,
+      minZoom: 0,
+      maxZoom: mapConfig.maxZoom,
+      zoomSnap: 0.5,
+      renderer: L.canvas(),
+      attributionControl: false,
+    });
+
+    var PZTileLayer = L.TileLayer.extend({
+      getTileUrl: function (coords) {
+        return mapConfig.tileUrlTemplate
+          .replace("{z}", coords.z)
+          .replace("{x}", coords.x)
+          .replace("{y}", coords.y);
+      },
+    });
+
+    new PZTileLayer("", {
+      tileSize: mapConfig.tileSize,
+      minZoom: 0,
+      maxZoom: mapConfig.maxZoom,
+      noWrap: true,
+    }).addTo(map);
+
+    var worldBounds = L.latLngBounds(
+      map.unproject([0, mapConfig.height], mapConfig.maxZoom),
+      map.unproject([mapConfig.width, 0], mapConfig.maxZoom)
+    );
+    map.setMaxBounds(worldBounds.pad(0.15));
+
+    var latlngs = trailPoints.map(function (p) {
+      return map.unproject([p.px, p.py], mapConfig.maxZoom);
+    });
+
+    if (latlngs.length > 1) {
+      L.polyline(latlngs, { color: "#f0aa3c", weight: 2, opacity: 0.85 }).addTo(map);
+    }
+
+    trailPoints.forEach(function (p, i) {
+      if (p.action && p.action !== "tick") return; // drawn as an event marker below instead
+      var isLast = i === trailPoints.length - 1;
+      var marker = L.circleMarker(latlngs[i], {
+        radius: isLast ? 7 : 4,
+        color: "#ffffff",
+        weight: 2,
+        fillColor: isLast ? "#d62828" : "#f0aa3c",
+        fillOpacity: 1,
+      }).addTo(map);
+      marker.bindTooltip(new Date(p.t * 1000).toLocaleString());
+    });
+
+    // Event markers: died/killed_zombie/picked_up entries, grouped -- regardless
+    // of which of those three a given entry is -- whenever several happen close
+    // together in both time and space, e.g. a fight-then-loot moment that logs a
+    // kill, an item pickup, another kill and a death all within half a minute at
+    // the same spot. GROUP_DISTANCE_PX is in the same base-resolution pixel
+    // space as p.px/p.py (i.e. zoom-invariant, not screen pixels) -- ~1800px
+    // there works out to roughly 50 world tiles, generous enough to cover a
+    // player moving during a skirmish without merging genuinely separate
+    // incidents recorded within the same GROUP_WINDOW_SECONDS elsewhere on the map.
+    var GROUP_WINDOW_SECONDS = 30;
+    var GROUP_DISTANCE_PX = 1800;
+    var EVENT_ICONS = {
+      died: "/static/images/Skull.png",
+      killed_zombie: "/static/images/Moodle_Icon_Zombie.png",
+    };
+
+    function formatTime(t) {
+      return new Date(t * 1000).toLocaleString();
+    }
+
+    function iconForPoint(p) {
+      if (p.action === "picked_up") return p.icon || null;
+      return EVENT_ICONS[p.action] || null;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+
+    function describePoint(p) {
+      if (p.action === "died") return "Died";
+      if (p.action === "killed_zombie") return "Killed zombie" + (p.totalKills != null ? " (#" + p.totalKills + ")" : "");
+      if (p.action === "picked_up") return "Picked up: " + escapeHtml(p.itemName || p.item || "Unknown item");
+      return p.action;
+    }
+
+    function clusterEvents(points) {
+      var clusters = [];
+      points.forEach(function (p) {
+        if (!p.action || p.action === "tick") return;
+        var cluster = clusters.length ? clusters[clusters.length - 1] : null;
+        if (cluster) {
+          var last = cluster.points[cluster.points.length - 1];
+          var dt = p.t - last.t;
+          var dist = Math.hypot(p.px - last.px, p.py - last.py);
+          if (dt > GROUP_WINDOW_SECONDS || dist > GROUP_DISTANCE_PX) {
+            cluster = null;
+          }
+        }
+        if (!cluster) {
+          cluster = { points: [] };
+          clusters.push(cluster);
+        }
+        cluster.points.push(p);
+      });
+      return clusters;
+    }
+
+    function buildPopupHtml(cluster) {
+      var rows = cluster.points.map(function (p) {
+        var icon = iconForPoint(p);
+        var iconHtml = icon
+          ? '<img class="item-icon" src="' + icon + '" alt="">'
+          : '<span class="item-icon item-icon-blank"></span>';
+        return '<div class="stock-item">' + iconHtml + '<span class="item-name">' +
+          describePoint(p) + " &mdash; " + formatTime(p.t) + "</span></div>";
+      }).join("");
+      var heading = cluster.points.length > 1
+        ? "<strong>" + cluster.points.length + " events</strong>"
+        : "<strong>" + describePoint(cluster.points[0]) + "</strong>";
+      return heading + '<div class="breadcrumb-popup-list">' + rows + "</div>";
+    }
+
+    function buildIconHtml(cluster) {
+      var imgSrc = iconForPoint(cluster.points[cluster.points.length - 1]);
+      var img = imgSrc ? '<img src="' + imgSrc + '" alt="">' : "";
+      var badge = cluster.points.length > 1
+        ? '<span class="breadcrumb-event-badge">' + cluster.points.length + "</span>"
+        : "";
+      return '<div class="breadcrumb-event-icon">' + img + badge + "</div>";
+    }
+
+    clusterEvents(trailPoints).forEach(function (cluster) {
+      var last = cluster.points[cluster.points.length - 1];
+      var ll = map.unproject([last.px, last.py], mapConfig.maxZoom);
+      var marker = L.marker(ll, {
+        icon: L.divIcon({
+          className: "",
+          html: buildIconHtml(cluster),
+          iconSize: [26, 26],
+          iconAnchor: [13, 13],
+        }),
+      }).addTo(map);
+      marker.bindPopup(buildPopupHtml(cluster));
+    });
+
+    if (latlngs.length) {
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40], maxZoom: mapConfig.maxZoom });
+    } else {
+      map.fitBounds(worldBounds);
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -6,23 +6,25 @@
   <title>PZ Admin</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+  <script src="/static/map_preview.js?v={{ static_version }}" defer></script>
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
+  <script>
+    (function () {
+      if (localStorage.getItem("pzadmin-sidebar-collapsed") === "1") {
+        document.documentElement.classList.add("sidebar-collapsed");
+      }
+    })();
+  </script>
+
   <header>
+    <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle navigation" aria-expanded="true" aria-controls="sidebar">
+      <span class="hamburger-bar"></span>
+      <span class="hamburger-bar"></span>
+      <span class="hamburger-bar"></span>
+    </button>
     <h1>Project Zomboid Admin</h1>
-    <nav>
-      <a href="/server" class="{{ 'active' if active == 'server' else '' }}">Server</a>
-      <a href="/sandbox" class="{{ 'active' if active == 'sandbox' else '' }}">Sandbox</a>
-      <a href="/mods" class="{{ 'active' if active == 'mods' else '' }}">Mods</a>
-      <a href="/spawnpoints" class="{{ 'active' if active == 'spawnpoints' else '' }}">Dynamic Spawnpoints</a>
-      <a href="/logs" class="{{ 'active' if active == 'logs' else '' }}">Logs</a>
-      <a href="/battlepass" class="{{ 'active' if active == 'battlepass' else '' }}">Battle Pass</a>
-      <a href="/stats" class="{{ 'active' if active == 'stats' else '' }}">Players</a>
-      <a href="/playershops" class="{{ 'active' if active == 'playershops' else '' }}">Player Shops</a>
-      <a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>
-      <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">Settings</a>
-      <a href="/audit" class="{{ 'active' if active == 'audit' else '' }}">Audit Log</a>
-    </nav>
     <div class="header-right">
       <span class="status-badge" id="status-badge" title="Checking...">
         <span class="status-dot"></span>
@@ -37,18 +39,59 @@
     </div>
   </header>
 
-  <div id="flash-banner">
-    {% if flash %}
-    <div class="flash">{{ flash }}</div>
-    {% endif %}
+  <div class="app-body">
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Config</div>
+        <a href="/server" class="{{ 'active' if active == 'server' else '' }}">Server</a>
+        <a href="/sandbox" class="{{ 'active' if active == 'sandbox' else '' }}">Sandbox</a>
+        <a href="/mods" class="{{ 'active' if active == 'mods' else '' }}">Mods</a>
+        <a href="/spawnpoints" class="{{ 'active' if active == 'spawnpoints' else '' }}">Dynamic Spawnpoints</a>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Activity</div>
+        <a href="/logs" class="{{ 'active' if active == 'logs' else '' }}">Logs</a>
+        <a href="/battlepass" class="{{ 'active' if active == 'battlepass' else '' }}">Battle Pass</a>
+        <a href="/stats" class="{{ 'active' if active == 'stats' else '' }}">Players</a>
+        <a href="/playershops" class="{{ 'active' if active == 'playershops' else '' }}">Player Shops</a>
+        <a href="/shops" class="{{ 'active' if active == 'shops' else '' }}">Shops</a>
+        <a href="/audit" class="{{ 'active' if active == 'audit' else '' }}">Audit Log</a>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Admin</div>
+        <a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>
+        <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">Settings</a>
+      </div>
+    </nav>
+
+    <div class="app-content">
+      <div id="flash-banner">
+        {% if flash %}
+        <div class="flash">{{ flash }}</div>
+        {% endif %}
+      </div>
+
+      <main class="{{ 'main-wide' if active in ['stats', 'battlepass', 'audit', 'playershops', 'shops'] else '' }}">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
   </div>
 
-  <main class="{{ 'main-wide' if active in ['stats', 'battlepass', 'audit', 'playershops'] else '' }}">
-    {% block content %}{% endblock %}
-  </main>
+  <div class="map-hover-backdrop" id="map-hover-backdrop">
+    <div class="map-hover-preview" id="map-hover-preview">
+      <div class="map-hover-preview-header">
+        <span id="map-hover-preview-coords"></span>
+        <a id="map-hover-preview-link" target="_blank" rel="noopener">Open full map ↗</a>
+        <button type="button" class="map-hover-preview-close" id="map-hover-preview-close" aria-label="Close">×</button>
+      </div>
+      <img id="map-hover-preview-img" alt="Map preview" width="560" height="420">
+    </div>
+  </div>
 
   <script src="/static/filter.js?v={{ static_version }}" defer></script>
   <script src="/static/status.js?v={{ static_version }}" defer></script>
   <script src="/static/restart.js?v={{ static_version }}" defer></script>
+  <script src="/static/nav.js?v={{ static_version }}" defer></script>
 </body>
 </html>

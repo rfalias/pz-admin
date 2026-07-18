@@ -3,3 +3,10 @@ __pycache__/
 users.json
 data/
 .claude/
+
+# Extracted PZ game assets (item icons + the index built from them) --
+# large (~36MB) and not something to redistribute in this repo's history.
+# Built locally by src/items_index.py; the app degrades to blank icons
+# without them.
+src/static/images/
+src/items_index.json

@@ -2,6 +2,36 @@
 {% block content %}
 <p class="config-path">{{ data_path }}</p>
 
+<details class="group" {% if kill_leaderboard %}open{% endif %}>
+  <summary>Top Zombie Killers</summary>
+  <div class="group-body">
+    {% if not kill_leaderboard %}
+    <p class="empty">No zombie kills recorded yet.</p>
+    {% else %}
+    <div class="table-scroll">
+    <table class="stats-table bp-leaderboard">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Player</th>
+          <th>Kills</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in kill_leaderboard %}
+        <tr>
+          <td class="{% if p.rank == 1 %}bp-rank-1{% elif p.rank == 2 %}bp-rank-2{% elif p.rank == 3 %}bp-rank-3{% endif %}">{{ p.rank }}</td>
+          <td class="wrap-cell"><a href="/player/{{ p.username|urlencode }}">{{ p.username }}</a></td>
+          <td><strong>{{ p.kills }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </div>
+</details>
+
 {% if not leaderboard or not leaderboard.players %}
 <p class="empty">No battle pass data found at this path.</p>
 {% else %}

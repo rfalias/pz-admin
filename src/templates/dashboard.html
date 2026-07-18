@@ -61,6 +61,36 @@
     </details>
 
     <div class="group">
+      <div class="group-summary-static">Top Zombie Killers</div>
+      <div class="group-body">
+        {% if not kill_leaderboard %}
+        <p class="empty">No zombie kills recorded yet.</p>
+        {% else %}
+        <div class="table-scroll">
+        <table class="stats-table bp-leaderboard">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Kills</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in kill_leaderboard %}
+            <tr>
+              <td class="{% if p.rank == 1 %}bp-rank-1{% elif p.rank == 2 %}bp-rank-2{% elif p.rank == 3 %}bp-rank-3{% endif %}">{{ p.rank }}</td>
+              <td class="wrap-cell">{{ p.username }}</td>
+              <td><strong>{{ p.kills }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="group">
       <div class="group-summary-static">
         Battle Pass Leaderboard{% if leaderboard and leaderboard.season_name %} &mdash; {{ leaderboard.season_name }}{% endif %}
       </div>

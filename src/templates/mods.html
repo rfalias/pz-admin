@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<p class="config-path">{{ config_path }}</p>
+<p class="config-path">{{ config_path }} &middot; <a href="/mods/versions">Versions</a></p>
 <p class="help">Shortcut for editing just the Mods and WorkshopItems fields in the server settings ini. Each row pairs one mod ID with its Steam Workshop ID.</p>
 
 {% if mods_warning %}
@@ -17,6 +17,7 @@
 </div>
 
 <form method="post" action="/mods" id="mods-form">
+  <div class="table-scroll">
   <table class="stats-table" id="mods-table">
     <thead>
       <tr>
@@ -37,6 +38,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 
   <button type="button" class="char-toggle" id="add-row-btn">Add mod</button>
 
