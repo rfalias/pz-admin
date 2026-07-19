@@ -29,7 +29,7 @@ ACTIONS = {
     "restart": "Server restart",
     "user_create": "User created",
     "user_toggle_active": "User enabled/disabled",
-    "user_toggle_superuser": "Admin granted/revoked",
+    "user_role_change": "Role changed",
     "user_password_reset": "Password reset",
     "user_delete": "User deleted",
 }

@@ -54,7 +54,7 @@ from auth_db import (
     migrate_users_json,
     set_user_active,
     set_user_password,
-    set_user_superuser,
+    set_user_role,
 )
 
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
@@ -228,7 +228,19 @@ async def lifespan(app: FastAPI):
         mod_titles_task.cancel()
 
 
-app = FastAPI(title="PZ Admin", lifespan=lifespan)
+async def _stash_user_on_request(
+    request: Request, user: User | None = Depends(current_user_optional)
+) -> None:
+    """Runs for every request (registered as an app-level dependency below)
+    so templates can check viewer status via the is_viewer() Jinja global
+    without threading it through every route's own context dict. FastAPI
+    caches dependency results per-request, so routes that separately declare
+    their own `user: User = Depends(current_user_optional)` don't trigger a
+    second DB lookup here."""
+    request.state.user = user
+
+
+app = FastAPI(title="PZ Admin", lifespan=lifespan, dependencies=[Depends(_stash_user_on_request)])
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -236,6 +248,14 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 # keep serving a stale cached copy after `docker compose up -d --build`.
 templates.env.globals["static_version"] = str(int(time.time()))
 templates.env.globals["feature_enabled"] = _feature_enabled
+
+
+def _is_viewer(request: Request) -> bool:
+    user = getattr(request.state, "user", None)
+    return bool(user and user.is_viewer)
+
+
+templates.env.globals["is_viewer"] = _is_viewer
 
 
 def combined_server_status() -> dict:
@@ -555,6 +575,9 @@ def server_page(request: Request, user: User | None = Depends(current_user_optio
 async def server_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     form = dict(await request.form())
     old_entries = ini_config.parse_ini(SERVER_INI_PATH)
     entries = ini_config.parse_ini(SERVER_INI_PATH)
@@ -597,6 +620,9 @@ def mods_page(request: Request, user: User | None = Depends(current_user_optiona
 async def mods_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     form = await request.form()
     mod_ids = form.getlist("mod_id")
     workshop_ids = form.getlist("workshop_id")
@@ -635,8 +661,9 @@ async def mods_save(request: Request, user: User | None = Depends(current_user_o
 
 @app.post("/mods/import")
 async def mods_import(request: Request, user: User | None = Depends(current_user_optional)):
-    if not user:
-        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    denied = _require_writer_json(user)
+    if denied:
+        return denied
     body = await request.json()
     url = (body.get("url") or "").strip()
     workshop_id = mod_parser.extract_workshop_id(url)
@@ -674,6 +701,9 @@ def sandbox_page(request: Request, user: User | None = Depends(current_user_opti
 async def sandbox_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     form = dict(await request.form())
     old_entries, _ = lua_config.parse_sandbox(SANDBOX_LUA_PATH)
     entries, var_name = lua_config.parse_sandbox(SANDBOX_LUA_PATH)
@@ -718,6 +748,9 @@ async def versions_create(
 ):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     if page not in VERSION_PAGES:
         raise HTTPException(404)
     name = name.strip()
@@ -743,6 +776,9 @@ async def versions_apply(
 ):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     if page not in VERSION_PAGES:
         raise HTTPException(404)
     version = await asyncio.to_thread(
@@ -789,6 +825,9 @@ async def versions_delete(
 ):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     if page not in VERSION_PAGES:
         raise HTTPException(404)
     version = await asyncio.to_thread(
@@ -842,6 +881,9 @@ def spawnpoints_page(request: Request, user: User | None = Depends(current_user_
 async def spawnpoints_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     form = await request.form()
     ids = form.getlist("id")
     names = form.getlist("name")
@@ -899,6 +941,9 @@ async def spawnpoints_save(request: Request, user: User | None = Depends(current
 async def event_zones_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     form = await request.form()
     ids = form.getlist("zone_id")
     names = form.getlist("zone_name")
@@ -1113,6 +1158,9 @@ def shops_items_index(user: User | None = Depends(current_user_optional)):
 async def shops_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     form = await request.form()
     ids = form.getlist("id")
     types = form.getlist("type")
@@ -1410,6 +1458,7 @@ def player_detail_page(
 
     all_locations, filtered_locations, recent_locations = [], [], []
     kill_tally = None
+    player_stats = None
     map_config = None
     trail_points_json = "[]"
     MAX_TRAIL_POINTS = 2000
@@ -1421,8 +1470,18 @@ def player_detail_page(
             if loc.get("action") == "picked_up" and loc.get("item"):
                 loc["icon_url"] = items_index.icon_url(loc["item"])
                 loc["display_name"] = items_index.display_name(loc["item"], loc["item"])
+            elif loc.get("action") in ("entered_vehicle", "exited_vehicle") and loc.get("vehicle"):
+                loc["vehicle_name"] = player_locations.vehicle_display_name(loc["vehicle"])
 
         kill_tally = player_locations.read_kill_tally(username, PLAYER_LOCATIONS_DIR)
+
+        player_stats = player_locations.read_player_stats(username, PLAYER_LOCATIONS_DIR)
+        if player_stats:
+            for key in ("primaryItem", "secondaryItem"):
+                item = player_stats.get(key)
+                if item:
+                    player_stats[f"{key}_icon"] = items_index.icon_url(item)
+                    player_stats[f"{key}_name"] = items_index.display_name(item, item)
 
         trail_source = filtered_locations[-MAX_TRAIL_POINTS:]
         if trail_source:
@@ -1439,6 +1498,9 @@ def player_detail_page(
                         point["icon"] = items_index.icon_url(e["item"])
                     elif point["action"] == "killed_zombie" and e.get("totalKills") is not None:
                         point["totalKills"] = e["totalKills"]
+                    elif point["action"] in ("entered_vehicle", "exited_vehicle") and e.get("vehicle"):
+                        point["vehicle"] = e["vehicle"]
+                        point["vehicleName"] = player_locations.vehicle_display_name(e["vehicle"])
                     trail_points.append(point)
                 trail_points_json = json.dumps(trail_points)
                 map_config = map_preview.get_map_config(LOGS_DIR)
@@ -1459,6 +1521,7 @@ def player_detail_page(
             "battlepass": battlepass,
             "locations": recent_locations,
             "kill_tally": kill_tally,
+            "player_stats": player_stats,
             "filtered_location_count": len(filtered_locations),
             "total_location_count": len(all_locations),
             "start": start,
@@ -1482,6 +1545,9 @@ async def player_clear_location(
 ):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     removed = await asyncio.to_thread(
         player_locations.clear_location_history, username, PLAYER_LOCATIONS_DIR, start, end
     )
@@ -1505,6 +1571,9 @@ def status_raw(request: Request):
 async def rcon_save(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_writer(request, user)
+    if denied:
+        return denied
     try:
         response = rcon_client.execute(RCON_HOST, RCON_PORT, RCON_PASSWORD, "save")
         request.session["flash"] = f"Save command sent via RCON: {response or 'OK'}"
@@ -1520,6 +1589,9 @@ async def rcon_save(request: Request, user: User | None = Depends(current_user_o
 def remote_page(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    denied = _require_not_viewer_page(request, user)
+    if denied:
+        return denied
     return templates.TemplateResponse(
         request,
         "remote.html",
@@ -1547,8 +1619,9 @@ def _classify_remote_command(command: str) -> str:
 
 @app.post("/remote/run")
 async def remote_run(request: Request, user: User | None = Depends(current_user_optional)):
-    if not user:
-        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    denied = _require_writer_json(user)
+    if denied:
+        return denied
     body = await request.json()
     command = (body.get("command") or "").strip()
     if not command:
@@ -1581,8 +1654,9 @@ def _write_last_wipe(wipe_world: bool, wipe_players: bool) -> None:
 
 @app.post("/wipe")
 async def wipe_server(request: Request, user: User | None = Depends(current_user_optional)):
-    if not user:
-        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    denied = _require_writer_json(user)
+    if denied:
+        return denied
     body = await request.json()
     wipe_world = bool(body.get("wipe_world", True))
     wipe_players = bool(body.get("wipe_players", False))
@@ -1640,8 +1714,9 @@ async def wipe_server(request: Request, user: User | None = Depends(current_user
 
 @app.post("/restart")
 async def restart_server(request: Request, user: User | None = Depends(current_user_optional)):
-    if not user:
-        return JSONResponse({"message": None, "error": "Not logged in."}, status_code=401)
+    denied = _require_writer_json(user)
+    if denied:
+        return denied
     try:
         status = await asyncio.to_thread(docker_control.restart_pz_container)
         await _audit(request, "restart", user.username)
@@ -1662,6 +1737,39 @@ def _require_admin(request: Request, user: User | None) -> RedirectResponse | No
     return None
 
 
+def _require_writer(request: Request, user: User | None) -> RedirectResponse | None:
+    """For traditional HTML-form write routes -- redirects back to wherever
+    the form was submitted from, matching how these routes already redirect
+    on other validation failures."""
+    if not user:
+        return RedirectResponse("/dashboard", status_code=303)
+    if user.is_viewer:
+        request.session["flash"] = "View-only accounts can't make changes."
+        return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
+    return None
+
+
+def _require_writer_json(user: User | None) -> JSONResponse | None:
+    """For the fetch-based JSON write routes, which already return a
+    JSONResponse({"error": ...}) shape for the not-authenticated case."""
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if user.is_viewer:
+        return JSONResponse({"error": "View-only accounts can't make changes."}, status_code=403)
+    return None
+
+
+def _require_not_viewer_page(request: Request, user: User | None) -> RedirectResponse | None:
+    """Remote Control is hidden entirely for viewers, not just its submit
+    action -- same shape as _require_admin's whole-page block."""
+    if not user:
+        return RedirectResponse("/dashboard", status_code=303)
+    if user.is_viewer:
+        request.session["flash"] = "Remote Control isn't available for view-only accounts."
+        return RedirectResponse("/", status_code=303)
+    return None
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, user: User | None = Depends(current_user_optional)):
     denied = _require_admin(request, user)
@@ -1673,6 +1781,8 @@ async def settings_page(request: Request, user: User | None = Depends(current_us
             "id": u.id,
             "username": u.username,
             "is_superuser": u.is_superuser,
+            "is_viewer": u.is_viewer,
+            "role": "admin" if u.is_superuser else ("viewer" if u.is_viewer else "user"),
             "is_active": u.is_active,
             "last_login_epoch": activity.get(u.username, {}).get("last_login_epoch"),
             "last_activity_epoch": activity.get(u.username, {}).get("last_activity_epoch"),
@@ -1846,20 +1956,22 @@ async def settings_create_user(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    is_superuser: str | None = Form(None),
+    role: str = Form("user"),
     user: User | None = Depends(current_user_optional),
 ):
     denied = _require_admin(request, user)
     if denied:
         return denied
     username = username.strip()
+    if role not in ("admin", "user", "viewer"):
+        role = "user"
     if not username or not password:
         request.session["flash"] = "Username and password are required."
     else:
         try:
-            await create_user(username, password, is_superuser=bool(is_superuser))
+            await create_user(username, password, role=role)
             request.session["flash"] = f"Created user '{username}'."
-            await _audit(request, "user_create", user.username, detail=username)
+            await _audit(request, "user_create", user.username, detail=f"{username} ({role})")
         except UsernameTakenError:
             request.session["flash"] = f"Username '{username}' is already taken."
             await _audit(request, "user_create", user.username, detail=username, success=False)
@@ -1892,29 +2004,32 @@ async def settings_toggle_active(
     return RedirectResponse("/settings", status_code=303)
 
 
-@app.post("/settings/users/{user_id}/toggle-superuser")
-async def settings_toggle_superuser(
+@app.post("/settings/users/{user_id}/role")
+async def settings_set_role(
     request: Request,
     user_id: uuid.UUID,
+    role: str = Form(...),
     user: User | None = Depends(current_user_optional),
 ):
     denied = _require_admin(request, user)
     if denied:
         return denied
+    if role not in ("admin", "user", "viewer"):
+        request.session["flash"] = "Invalid role."
+        return RedirectResponse("/settings", status_code=303)
     target = await get_user_by_id(user_id)
     if target is None:
         request.session["flash"] = "User not found."
     elif target.id == user.id:
-        request.session["flash"] = "You can't change your own admin status."
+        request.session["flash"] = "You can't change your own role."
     else:
         try:
-            await set_user_superuser(user_id, not target.is_superuser)
-            verb = "Granted" if not target.is_superuser else "Revoked"
-            request.session["flash"] = f"{verb} admin for '{target.username}'."
-            await _audit(request, "user_toggle_superuser", user.username, detail=target.username)
+            await set_user_role(user_id, role)
+            request.session["flash"] = f"Set '{target.username}' to {role}."
+            await _audit(request, "user_role_change", user.username, detail=f"{target.username} -> {role}")
         except LastSuperuserError:
             request.session["flash"] = "Can't remove the last active admin."
-            await _audit(request, "user_toggle_superuser", user.username, detail=target.username, success=False)
+            await _audit(request, "user_role_change", user.username, detail=target.username, success=False)
     return RedirectResponse("/settings", status_code=303)
 
 

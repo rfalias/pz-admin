@@ -46,6 +46,75 @@
 </details>
 {% endif %}
 
+{% if feature_enabled('player_locations') %}
+<details class="group" {% if player_stats %}open{% endif %}>
+  <summary>Player Stats</summary>
+  <div class="group-body">
+    {% if not player_stats %}
+    <p class="empty">No live stats snapshot found for this player.</p>
+    {% else %}
+    <p class="help">Live character snapshot, refreshed every 15s alongside the position tick &mdash; last updated <span class="local-time" data-epoch="{{ player_stats.lastUpdated }}"></span>.</p>
+    <div class="char-grid">
+      <div>
+        <strong>{{ player_stats.profession or "Unknown profession" }}</strong>
+        {% if player_stats.traits %}<p class="help">Traits: {{ player_stats.traits|join(", ") }}</p>{% endif %}
+        <div class="stock-list" style="margin-top: 0.5rem;">
+          {% if player_stats.primaryItem %}
+          <span class="stock-item" style="width:auto;">
+            {% if player_stats.primaryItem_icon %}
+            <img class="item-icon" src="{{ player_stats.primaryItem_icon }}" alt="">
+            {% else %}
+            <span class="item-icon item-icon-blank"></span>
+            {% endif %}
+            <span class="item-name" style="white-space:normal;">Primary: {{ player_stats.primaryItem_name }}</span>
+          </span>
+          {% endif %}
+          {% if player_stats.secondaryItem %}
+          <span class="stock-item" style="width:auto;">
+            {% if player_stats.secondaryItem_icon %}
+            <img class="item-icon" src="{{ player_stats.secondaryItem_icon }}" alt="">
+            {% else %}
+            <span class="item-icon item-icon-blank"></span>
+            {% endif %}
+            <span class="item-name" style="white-space:normal;">Secondary: {{ player_stats.secondaryItem_name }}</span>
+          </span>
+          {% endif %}
+          {% if player_stats.vehicle %}
+          <span class="stock-item" style="width:auto;">
+            <img class="item-icon" src="/static/images/Item_ToyCar.png" alt="">
+            <span class="item-name" style="white-space:normal;">In vehicle: {{ player_stats.vehicleName }}</span>
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="player-stat-bars">
+        {% for key, label, cap, worse in [
+          ("hunger", "Hunger", 100, true),
+          ("thirst", "Thirst", 100, true),
+          ("stress", "Stress", 100, true),
+          ("boredom", "Boredom", 100, true),
+          ("unhappiness", "Unhappiness", 100, true),
+          ("endurance", "Endurance", 1, false),
+        ] %}
+        {% set raw = player_stats.get(key) %}
+        {% if raw is not none %}
+        {% set pct = [[(raw / cap * 100), 0]|max, 100]|min %}
+        <div class="player-stat-row">
+          <span class="player-stat-label">{{ label }}</span>
+          <div class="player-stat-bar {{ 'player-stat-bar-good' if not worse else 'player-stat-bar-bad' }}">
+            <div class="mini-bar-fill" style="width: {{ pct }}%;"></div>
+          </div>
+          <span class="player-stat-value">{{ "%.2f"|format(raw) }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</details>
+{% endif %}
+
 <details class="group" open>
   <summary>Deaths ({{ deaths|length }})</summary>
   <div class="group-body">
@@ -114,12 +183,13 @@
     <p class="empty">No location history recorded for this player.</p>
     {% else %}
     {% if map_config %}
-    <p class="help">Drag to pan, scroll or use +/&minus; to zoom. Newest position in red, older breadcrumbs in amber &mdash; hover a dot for its timestamp. Skull markers are deaths, zombie-head markers are kills (badged with a count when several happened close together), and item-icon markers are pickups (badged and grouped when several items were picked up in one spot) &mdash; click a marker for details.{% if trail_points_truncated %} Showing the most recent {{ max_trail_points }} of {{ filtered_location_count }} points in range.{% endif %}</p>
+    <p class="help">Drag to pan, scroll or use +/&minus; to zoom. Newest position in red, older breadcrumbs in amber &mdash; hover a dot for its timestamp. Skull markers are deaths, zombie-head markers are kills, car markers are vehicle enter/exit, and item-icon markers are pickups (badged and grouped when several events happened close together) &mdash; click a marker for details.{% if trail_points_truncated %} Showing the most recent {{ max_trail_points }} of {{ filtered_location_count }} points in range.{% endif %}</p>
     <div id="breadcrumb-map" class="breadcrumb-map"></div>
     {% else %}
     <p class="empty">Map preview unavailable (couldn't reach map.projectzomboid.com).</p>
     {% endif %}
 
+    {% if not is_viewer(request) %}
     <div class="row-actions" style="margin-top: 0.5rem;">
       <form method="post" action="/player/{{ username }}/clear-location" onsubmit="return confirm('Clear ALL location history for {{ username }}? This cannot be undone.');">
         <button type="submit" class="settings-btn settings-btn-danger">Clear all history</button>
@@ -130,6 +200,7 @@
         <button type="submit" class="settings-btn settings-btn-danger" {% if start is none and end is none %}disabled title="Select a timeframe above and click Apply first"{% endif %}>Clear shown range</button>
       </form>
     </div>
+    {% endif %}
 
     <details class="group" style="margin-top: 0.5rem;">
       <summary>Raw entries ({{ locations|length }} shown)</summary>
@@ -157,6 +228,16 @@
                   <span class="item-icon item-icon-blank"></span>
                   {% endif %}
                   <span class="item-name" style="white-space:normal;">Picked up: {{ loc.display_name }}</span>
+                </span>
+                {% elif loc.action == "entered_vehicle" %}
+                <span class="stock-item" style="width:auto;">
+                  <img class="item-icon" src="/static/images/Item_ToyCar.png" alt="">
+                  <span class="item-name" style="white-space:normal;">Entered vehicle{% if loc.vehicle_name %}: {{ loc.vehicle_name }}{% endif %}</span>
+                </span>
+                {% elif loc.action == "exited_vehicle" %}
+                <span class="stock-item" style="width:auto;">
+                  <img class="item-icon" src="/static/images/Item_ToyCar.png" alt="">
+                  <span class="item-name" style="white-space:normal;">Exited vehicle{% if loc.vehicle_name %}: {{ loc.vehicle_name }}{% endif %}</span>
                 </span>
                 {% else %}
                 &mdash;
@@ -268,9 +349,39 @@
       return map.unproject([p.px, p.py], mapConfig.maxZoom);
     });
 
-    if (latlngs.length > 1) {
-      L.polyline(latlngs, { color: "#f0aa3c", weight: 2, opacity: 0.85 }).addTo(map);
-    }
+    // A death breaks the trail -- the player respawns somewhere else
+    // entirely. But the very next logged point after "died" is still the
+    // corpse's position (the same tick cycle catches it a few seconds
+    // later, before the actual respawn teleport lands -- confirmed against
+    // real location_history.txt data), so it can't be trusted as the start
+    // of the new, unrelated post-respawn path either. That point is drawn
+    // isolated (its own single-point non-)segment, and the real new chain
+    // only starts connecting from the point after *that*.
+    var trailSegments = [];
+    var currentSegment = [];
+    var isolateNext = false;
+    trailPoints.forEach(function (p, i) {
+      if (isolateNext) {
+        if (currentSegment.length) trailSegments.push(currentSegment);
+        trailSegments.push([latlngs[i]]);
+        currentSegment = [];
+        isolateNext = p.action === "died";
+        return;
+      }
+      currentSegment.push(latlngs[i]);
+      if (p.action === "died") {
+        trailSegments.push(currentSegment);
+        currentSegment = [];
+        isolateNext = true;
+      }
+    });
+    if (currentSegment.length) trailSegments.push(currentSegment);
+
+    trailSegments.forEach(function (segment) {
+      if (segment.length > 1) {
+        L.polyline(segment, { color: "#f0aa3c", weight: 2, opacity: 0.85 }).addTo(map);
+      }
+    });
 
     trailPoints.forEach(function (p, i) {
       if (p.action && p.action !== "tick") return; // drawn as an event marker below instead
@@ -299,6 +410,8 @@
     var EVENT_ICONS = {
       died: "/static/images/Skull.png",
       killed_zombie: "/static/images/Moodle_Icon_Zombie.png",
+      entered_vehicle: "/static/images/Item_ToyCar.png",
+      exited_vehicle: "/static/images/Item_ToyCar.png",
     };
 
     function formatTime(t) {
@@ -320,6 +433,8 @@
       if (p.action === "died") return "Died";
       if (p.action === "killed_zombie") return "Killed zombie" + (p.totalKills != null ? " (#" + p.totalKills + ")" : "");
       if (p.action === "picked_up") return "Picked up: " + escapeHtml(p.itemName || p.item || "Unknown item");
+      if (p.action === "entered_vehicle") return "Entered vehicle" + (p.vehicleName ? ": " + escapeHtml(p.vehicleName) : "");
+      if (p.action === "exited_vehicle") return "Exited vehicle" + (p.vehicleName ? ": " + escapeHtml(p.vehicleName) : "");
       return p.action;
     }
 

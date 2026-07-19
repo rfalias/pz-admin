@@ -8,23 +8,23 @@
   <input type="search" id="settings-search" placeholder="Search settings by name, description, or value..." autocomplete="off">
 </div>
 <form method="post" action="/sandbox">
-  {% macro render_items(items, prefix) %}
+  {% macro render_items(items, prefix, viewer) %}
     {% for item in items %}
       {% set path = prefix ~ item.key %}
       {% if item.type == 'table' %}
         <details class="group">
           <summary>{{ item.key }}</summary>
           <div class="group-body">
-            {{ render_items(item.children, path ~ '.') }}
+            {{ render_items(item.children, path ~ '.', viewer) }}
           </div>
         </details>
       {% else %}
         <div class="field">
           <label for="sb-{{ path }}">{{ item.key }}</label>
           {% if item.type == 'bool' %}
-          <input type="checkbox" id="sb-{{ path }}" name="{{ path }}" {% if item.value == 'true' %}checked{% endif %}>
+          <input type="checkbox" id="sb-{{ path }}" name="{{ path }}" {% if item.value == 'true' %}checked{% endif %} {% if viewer %}disabled{% endif %}>
           {% else %}
-          <input type="text" id="sb-{{ path }}" name="{{ path }}" value="{{ item.value }}">
+          <input type="text" id="sb-{{ path }}" name="{{ path }}" value="{{ item.value }}" {% if viewer %}disabled{% endif %}>
           {% endif %}
           {% if item.comment %}<p class="help">{{ item.comment }}</p>{% endif %}
         </div>
@@ -35,14 +35,16 @@
   <details class="group">
     <summary>{{ cat.name }}</summary>
     <div class="group-body">
-      {{ render_items(cat.settings, "") }}
+      {{ render_items(cat.settings, "", is_viewer(request)) }}
     </div>
   </details>
   {% endfor %}
-  {{ render_items(tables, "") }}
+  {{ render_items(tables, "", is_viewer(request)) }}
+  {% if not is_viewer(request) %}
   <div class="save-bar">
     <button type="submit" class="save-btn">Save Sandbox Settings</button>
   </div>
+  {% endif %}
 </form>
 {% endif %}
 {% endblock %}

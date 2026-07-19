@@ -441,6 +441,48 @@ html.sidebar-collapsed .sidebar {
   text-transform: uppercase;
 }
 
+.player-stat-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 260px;
+}
+
+.player-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.player-stat-label {
+  width: 90px;
+  flex: none;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.player-stat-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.player-stat-bar .mini-bar-fill { height: 100%; background: var(--accent); }
+.player-stat-bar.player-stat-bar-good .mini-bar-fill { background: #6cbf4a; }
+.player-stat-bar.player-stat-bar-bad .mini-bar-fill { background: #d98a8a; }
+
+.player-stat-value {
+  width: 50px;
+  flex: none;
+  text-align: right;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 .user { color: var(--muted); }
 
 .header-right a {
@@ -563,6 +605,16 @@ main.main-wide {
 .field input[type="checkbox"] {
   width: 1.1rem;
   height: 1.1rem;
+}
+
+/* Viewer-role accounts see config values but can't edit them -- no
+   existing generic disabled-field treatment, only a couple of one-off
+   button :disabled rules, so this is new. */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .warning {
@@ -1305,6 +1357,7 @@ a.mod-tag:hover {
 }
 
 .settings-badge-admin { color: #d9b23a; border-color: #d9b23a; }
+.settings-badge-viewer { color: var(--muted); border-color: var(--muted); }
 .settings-badge-active { color: #6cbf4a; border-color: #6cbf4a; }
 .settings-badge-disabled { color: var(--danger); border-color: var(--danger); }
 

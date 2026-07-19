@@ -104,10 +104,12 @@
         <label for="new-password">Password</label>
         <input type="password" id="new-password" name="password" required autocomplete="new-password">
       </div>
-      <label class="settings-checkbox-label">
-        <input type="checkbox" name="is_superuser" checked>
-        Admin (can manage users)
-      </label>
+      <div class="field">
+        <label>Role</label>
+        <label class="settings-checkbox-label"><input type="radio" name="role" value="admin"> Admin (can manage users)</label>
+        <label class="settings-checkbox-label"><input type="radio" name="role" value="user" checked> User (full access, no user management)</label>
+        <label class="settings-checkbox-label"><input type="radio" name="role" value="viewer"> Viewer (read-only, no changes)</label>
+      </div>
       <button type="submit" class="save-btn">Add user</button>
     </form>
   </div>
@@ -133,12 +135,17 @@
         {{ u.username }}{% if u.id|string == current_user_id %} <span class="help">(you)</span>{% endif %}
       </td>
       <td>
-        <span class="settings-badge {{ 'settings-badge-admin' if u.is_superuser else '' }}">
-          {{ "Admin" if u.is_superuser else "User" }}
+        <span class="settings-badge {{ 'settings-badge-admin' if u.is_superuser else ('settings-badge-viewer' if u.is_viewer else '') }}">
+          {{ "Admin" if u.is_superuser else ("Viewer" if u.is_viewer else "User") }}
         </span>
         {% if u.id|string != current_user_id %}
-        <form method="post" action="/settings/users/{{ u.id }}/toggle-superuser" class="settings-inline-form">
-          <button type="submit" class="settings-btn">{{ "Remove admin" if u.is_superuser else "Make admin" }}</button>
+        <form method="post" action="/settings/users/{{ u.id }}/role" class="settings-inline-form">
+          <select name="role" class="access-select">
+            <option value="admin" {% if u.role == "admin" %}selected{% endif %}>Admin</option>
+            <option value="user" {% if u.role == "user" %}selected{% endif %}>User</option>
+            <option value="viewer" {% if u.role == "viewer" %}selected{% endif %}>Viewer</option>
+          </select>
+          <button type="submit" class="settings-btn">Set role</button>
         </form>
         {% endif %}
       </td>

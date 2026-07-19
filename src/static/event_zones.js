@@ -40,7 +40,10 @@
 
   function updateAddPointBtn(card) {
     var btn = card.querySelector("[data-add-point]");
-    btn.disabled = pointCount(card) >= limits.max_spawn_points_per_zone;
+    // Runs at page-init time too (not just after add/remove clicks), so a
+    // viewer-disabled button rendered server-side must stay disabled here
+    // rather than being re-enabled just because the zone is under its limit.
+    btn.disabled = window.PZ_ADMIN_VIEWER || pointCount(card) >= limits.max_spawn_points_per_zone;
   }
 
   function buildPointRow() {

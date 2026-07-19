@@ -10,8 +10,8 @@
 <div class="field">
   <label for="import-url">Import from Steam Workshop URL</label>
   <div class="logs-controls-form">
-    <input type="text" id="import-url" class="import-url-input" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=...">
-    <button type="button" class="char-toggle" id="import-btn">Fetch</button>
+    <input type="text" id="import-url" class="import-url-input" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=..." {% if is_viewer(request) %}disabled{% endif %}>
+    <button type="button" class="char-toggle" id="import-btn" {% if is_viewer(request) %}disabled{% endif %}>Fetch</button>
   </div>
   <p class="help" id="import-status">Follows required-item dependencies automatically. Review the rows it adds before saving.</p>
 </div>
@@ -31,20 +31,22 @@
       {% for mod_id, workshop_id in rows %}
       <tr draggable="true">
         <td class="drag-handle" title="Drag to reorder">⠿</td>
-        <td><input type="text" name="mod_id" value="{{ mod_id }}" placeholder="Base"></td>
-        <td><input type="text" name="workshop_id" value="{{ workshop_id }}" placeholder="123456789"></td>
-        <td><button type="button" class="row-remove-btn" onclick="this.closest('tr').remove()">Remove</button></td>
+        <td><input type="text" name="mod_id" value="{{ mod_id }}" placeholder="Base" {% if is_viewer(request) %}disabled{% endif %}></td>
+        <td><input type="text" name="workshop_id" value="{{ workshop_id }}" placeholder="123456789" {% if is_viewer(request) %}disabled{% endif %}></td>
+        <td>{% if not is_viewer(request) %}<button type="button" class="row-remove-btn" onclick="this.closest('tr').remove()">Remove</button>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
 
-  <button type="button" class="char-toggle" id="add-row-btn">Add mod</button>
+  <button type="button" class="char-toggle" id="add-row-btn" {% if is_viewer(request) %}disabled{% endif %}>Add mod</button>
 
+  {% if not is_viewer(request) %}
   <div class="save-bar">
     <button type="submit" class="save-btn">Save Mods</button>
   </div>
+  {% endif %}
 </form>
 
 <script src="/static/mods.js?v={{ static_version }}" defer></script>

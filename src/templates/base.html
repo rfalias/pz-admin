@@ -30,11 +30,13 @@
         <span class="status-dot"></span>
         <span class="status-text">checking...</span>
       </span>
+      {% if not is_viewer(request) %}
       <form method="post" action="/rcon/save">
         <button type="submit" class="save-server-btn">Save World</button>
       </form>
       <button type="button" class="restart-btn" id="restart-btn" data-container="{{ container }}">Restart Server</button>
-      <span class="user">{{ user }}</span>
+      {% endif %}
+      <span class="user">{{ user }}{% if is_viewer(request) %} <span class="help">(view only)</span>{% endif %}</span>
       <a href="/logout">Logout</a>
     </div>
   </header>
@@ -62,7 +64,7 @@
       </div>
       <div class="sidebar-group">
         <div class="sidebar-group-label">Admin</div>
-        <a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>
+        {% if not is_viewer(request) %}<a href="/remote" class="{{ 'active' if active == 'remote' else '' }}">Remote Control</a>{% endif %}
         <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">Settings</a>
       </div>
     </nav>

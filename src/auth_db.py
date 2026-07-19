@@ -14,9 +14,9 @@ from fastapi_users_db_sqlalchemy.access_token import (
     SQLAlchemyAccessTokenDatabase,
     SQLAlchemyBaseAccessTokenTableUUID,
 )
-from sqlalchemy import func, select
+from sqlalchemy import Boolean, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, synonym
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, synonym
 
 APP_DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "/app/data"))
 AUTH_DB_PATH = APP_DATA_DIR / "auth.db"
@@ -40,6 +40,10 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     # fastapi-users models identity as "email"; this app has no real email
     # addresses, just usernames, so alias it for readability in our own code.
     username = synonym("email")
+    # Read-only role: can view every page but every write route rejects
+    # them. A row should never have both is_superuser and is_viewer set --
+    # see set_user_role() below, the only place either flag is written.
+    is_viewer: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
@@ -49,6 +53,18 @@ class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
 async def create_db_and_tables() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_is_viewer_column_if_missing)
+
+
+def _add_is_viewer_column_if_missing(sync_conn) -> None:
+    """create_all only creates missing *tables*, not missing columns on a
+    table that already existed before this column was added -- the live
+    auth.db already has a populated user table without is_viewer, so a
+    fresh install (where create_all above already included it) and an
+    upgrade (needs this ALTER TABLE) both end up consistent."""
+    columns = [row[1] for row in sync_conn.exec_driver_sql("PRAGMA table_info(user)").fetchall()]
+    if "is_viewer" not in columns:
+        sync_conn.exec_driver_sql("ALTER TABLE user ADD COLUMN is_viewer BOOLEAN NOT NULL DEFAULT 0")
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
@@ -154,7 +170,8 @@ async def get_user_by_id(user_id: uuid.UUID) -> User | None:
         return await session.get(User, user_id)
 
 
-async def create_user(username: str, password: str, is_superuser: bool = False) -> User:
+async def create_user(username: str, password: str, role: str = "user") -> User:
+    """role: "admin" | "user" | "viewer"."""
     password_helper = PasswordHelper()
     async with async_session_maker() as session:
         user_db = SQLAlchemyUserDatabase(session, User)
@@ -165,7 +182,8 @@ async def create_user(username: str, password: str, is_superuser: bool = False) 
                 "email": username,
                 "hashed_password": password_helper.hash(password),
                 "is_active": True,
-                "is_superuser": is_superuser,
+                "is_superuser": role == "admin",
+                "is_viewer": role == "viewer",
                 "is_verified": True,
             }
         )
@@ -192,7 +210,11 @@ async def set_user_active(user_id: uuid.UUID, active: bool) -> None:
         await session.commit()
 
 
-async def set_user_superuser(user_id: uuid.UUID, is_superuser: bool) -> None:
+async def set_user_role(user_id: uuid.UUID, role: str) -> None:
+    """role: "admin" | "user" | "viewer". Sets is_superuser/is_viewer
+    together so a row is never both (or neither meaningfully ambiguous)."""
+    is_superuser = role == "admin"
+    is_viewer = role == "viewer"
     async with async_session_maker() as session:
         user = await session.get(User, user_id)
         if user is None:
@@ -205,6 +227,7 @@ async def set_user_superuser(user_id: uuid.UUID, is_superuser: bool) -> None:
         ):
             raise LastSuperuserError()
         user.is_superuser = is_superuser
+        user.is_viewer = is_viewer
         session.add(user)
         await session.commit()
 

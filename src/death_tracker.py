@@ -40,6 +40,14 @@ def scan_logs(death_log_path: Path, db_path: Path) -> int:
         ).fetchone()
         offset = row[0] if row else 0
 
+        # If the file is now smaller than our last recorded position, it
+        # was truncated/recreated (e.g. DeathTracker.log rewritten fresh on
+        # a server restart) rather than appended to -- seeking to the old
+        # offset would land past EOF and read nothing, silently swallowing
+        # every death logged since, forever. Re-scan from the start instead.
+        if offset > death_log_path.stat().st_size:
+            offset = 0
+
         with death_log_path.open("rb") as f:
             f.seek(offset)
             chunk = f.read()

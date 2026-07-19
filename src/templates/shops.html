@@ -63,12 +63,14 @@
                 <span class="item-icon item-icon-blank"></span>
                 {% endif %}
                 <span class="item-name">{{ it.display_name }}</span>
-                <input type="number" min="0" step="1" class="item-price-input" value="{{ it.price }}">
-                <button type="button" class="item-remove-btn" aria-label="Remove item">×</button>
+                <input type="number" min="0" step="1" class="item-price-input" value="{{ it.price }}" {% if is_viewer(request) %}disabled{% endif %}>
+                <button type="button" class="item-remove-btn" aria-label="Remove item" {% if is_viewer(request) %}disabled{% endif %}>×</button>
               </div>
               {% endfor %}
             </div>
+            {% if not is_viewer(request) %}
             <input type="text" class="item-add-input" list="items-datalist" placeholder="Add item...">
+            {% endif %}
           </div>
         </details>
         <input type="hidden" name="stock_json" class="stock-json-field">
@@ -84,9 +86,11 @@
 
 <datalist id="items-datalist"></datalist>
 
+{% if not is_viewer(request) %}
 <div class="save-bar">
   <button type="submit" class="save-btn">Save Shops</button>
 </div>
+{% endif %}
 </form>
 
 <script>

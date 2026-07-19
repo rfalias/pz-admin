@@ -55,6 +55,7 @@
       </td>
       <td class="local-time" data-epoch="{{ u.lastConnectionEpoch or '' }}">{{ u.lastConnection or "" }}</td>
       <td>
+        {% if not is_viewer(request) %}
         <div class="row-actions">
           <select class="access-select" data-username="{{ u.username }}">
             {% for level in access_levels %}
@@ -63,13 +64,16 @@
           </select>
           <button type="button" class="access-set-btn" onclick="setAccessLevel(this)">Set</button>
         </div>
+        {% endif %}
       </td>
       <td>
+        {% if not is_viewer(request) %}
         <div class="row-actions">
           <select class="teleport-select" data-username="{{ u.username }}" style="display:none;"></select>
           <button type="button" class="teleport-btn" onclick="teleportToPlayer(this)" style="display:none;">Teleport to</button>
         </div>
         <span class="help teleport-empty">No players online</span>
+        {% endif %}
       </td>
       <td>
         {% if char %}

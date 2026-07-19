@@ -2,6 +2,7 @@
 {% block content %}
 <p class="config-path"><a href="{{ back_url }}">&larr; Back to {{ page_label }}</a></p>
 
+{% if not is_viewer(request) %}
 <div class="group">
   <div class="group-summary-static">Save current {{ page_label }} as a new version</div>
   <div class="group-body">
@@ -18,6 +19,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 {% if not versions %}
 <p class="empty">No versions saved yet.</p>
@@ -41,6 +43,7 @@
       <td class="wrap-cell">{{ v.description or "" }}</td>
       <td class="mono local-time" data-epoch="{{ v.created_epoch }}">{{ v.created_epoch }}</td>
       <td>
+        {% if not is_viewer(request) %}
         <div class="row-actions">
           <form method="post" action="/{{ page }}/versions/{{ v.id }}/apply" class="settings-inline-form"
                 onsubmit="return confirm('Apply version {{ v.name }}? This will overwrite the current {{ page_label }}. A backup of the current state will be saved first.');">
@@ -51,6 +54,7 @@
             <button type="submit" class="settings-btn settings-btn-danger">Delete</button>
           </form>
         </div>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}
