@@ -61,7 +61,8 @@ header h1 {
 
 .app-body {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
+  min-height: calc(100vh - 3.8rem); /* header's rendered height at desktop widths */
 }
 
 .sidebar-backdrop {
@@ -1731,6 +1732,10 @@ a.mod-tag:hover {
   .app-body {
     display: block;
     position: relative;
+    min-height: 0; /* header height varies here (wraps to 2-3 rows), so the
+                       desktop full-height calc doesn't apply -- the sidebar
+                       is a fixed-position off-canvas drawer at this width
+                       anyway, it doesn't need app-body's height to reach it. */
   }
 
   .app-content {
