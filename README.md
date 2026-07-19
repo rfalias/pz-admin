@@ -55,19 +55,19 @@ drawer; every page is horizontally-scroll-safe down to phone widths.
   categories. Named config version snapshots with one-click rollback.
 - **Mods** — edit the mod/workshop ID list, with Steam Workshop URL import
   and dependency resolution.
-- **Dynamic Spawnpoints** — event spawn points, plus EventManager trigger
-  zones (radius/cooldown-gated areas that roll a zombie spawn across their
-  own spawn points when a player enters).
-- **Player breadcrumb map** — per-player movement history rendered as an
-  interactive Leaflet map over the live game map tiles, with distinct
-  death/zombie-kill/item-pickup markers (item icons included) that group
-  into one marker+popup when several happen close together in time and
-  space. Zombie kill counts surface on the player page, the Players table,
-  and a "Top Zombie Killers" leaderboard on both the dashboard and Battle
-  Pass page.
-- **Shops / Player Shops** — an admin-priced item catalog (with an
-  item-icon typeahead) and a log of player-to-player shop/stall
-  transactions.
+- **Dynamic Spawnpoints** *(toggleable, see below)* — event spawn points,
+  plus EventManager trigger zones (radius/cooldown-gated areas that roll a
+  zombie spawn across their own spawn points when a player enters).
+- **Player breadcrumb map** *(toggleable, see below)* — per-player movement
+  history rendered as an interactive Leaflet map over the live game map
+  tiles, with distinct death/zombie-kill/item-pickup markers (item icons
+  included) that group into one marker+popup when several happen close
+  together in time and space. Zombie kill counts surface on the player
+  page, the Players table, and a "Top Zombie Killers" leaderboard on both
+  the dashboard and Battle Pass page.
+- **Shops / Player Shops** *(toggleable, see below)* — an admin-priced item
+  catalog (with an item-icon typeahead) and a log of player-to-player
+  shop/stall transactions.
 - **Logs / Audit Log** — categorized, searchable server logs (user/chat/
   connections/admin/command/debug) and a Battle Pass admin-log sub-tab, plus
   a full audit trail of every admin action taken through this app.
@@ -76,18 +76,21 @@ drawer; every page is horizontally-scroll-safe down to phone widths.
   file, inline access-level changes (`setaccesslevel`) and teleport-to-player
   (`teleportplayer`) controls, and an in-line map preview on hover for any
   in-game coordinate shown anywhere in the app.
-- **Battle Pass** — leaderboard built from the mod's `BattlePassPlayerData.json`
-  export: points, balance, tier/feat/quest progress, lifetime stats, and
-  top skills per player, plus "most points/crafted/deaths" highlights. The
-  same leaderboard is shown on the public dashboard.
+- **Battle Pass** *(toggleable, see below)* — leaderboard built from the
+  mod's `BattlePassPlayerData.json` export: points, balance, tier/feat/quest
+  progress, lifetime stats, and top skills per player, plus "most
+  points/crafted/deaths" highlights. The same leaderboard is shown on the
+  public dashboard.
 - **Remote Control** — a searchable, declarative catalog of RCON commands
   rendered as a form (with the right input type per argument), or edit the
   built command text directly before running it.
 - **Settings** — a live editor for RCON host/port/password, container/server
-  name, and public connect address (applied immediately, no restart), plus
-  admin user management: add users, promote/demote admin status,
-  disable/enable accounts, reset passwords, delete users. Refuses any
-  action that would leave zero active admins.
+  name, and public connect address (applied immediately, no restart);
+  per-feature enable/disable toggles for the mod-dependent features above
+  (see **Optional features & required mods** below); and admin user
+  management: add users, promote/demote admin status, disable/enable
+  accounts, reset passwords, delete users. Refuses any action that would
+  leave zero active admins.
 - **Dashboard** — public, unauthenticated landing page: server status,
   connect address, players online, the zombie-kill leaderboard, and the
   full Battle Pass leaderboard, with a Login button through to the admin
@@ -103,6 +106,31 @@ drawer; every page is horizontally-scroll-safe down to phone widths.
   loads. Below 880px wide it becomes a hamburger-triggered off-canvas
   drawer, and the rest of the UI (tables, forms, the breadcrumb map) is
   responsive down to phone widths.
+
+## Optional features & required mods
+
+Battle Pass, Shops, Dynamic Spawnpoints, and Player Location Tracking each
+depend on a specific optional Workshop mod being installed on the game
+server — without it, that mod's data file never gets created and the
+feature just has nothing to show. Each one can be toggled off from
+**Settings → Optional Features** for a server that doesn't run it, instead
+of leaving a permanently-empty-looking tab; toggling is live (no restart)
+and doesn't delete any existing data. All four default to **on**.
+
+| Feature | Required Workshop mod(s) |
+|---|---|
+| Battle Pass | [BattlePass](https://steamcommunity.com/sharedfiles/filedetails/?id=3756808742) |
+| Shops *(covers both the Shops and Player Shops tabs — same mod)* | [PlayerShops](https://steamcommunity.com/sharedfiles/filedetails/?id=3749824460) |
+| Dynamic Spawnpoints *(covers both the Event Spawns and Trigger Zones sub-tabs)* | [DynamicSpawnPoints](https://steamcommunity.com/sharedfiles/filedetails/?id=3759808711), [EventManager](https://steamcommunity.com/sharedfiles/filedetails/?id=3762284248) |
+| Player Location Tracking *(breadcrumb map, zombie-kill counts, Top Zombie Killers leaderboards)* | [PlayerLocationReporter](https://steamcommunity.com/sharedfiles/filedetails/?id=3767193809) |
+
+Settings also shows a live installed/not-installed badge next to each mod
+link, checked against the server's own `WorkshopItems` list — so you can
+tell at a glance whether a toggle you've enabled actually has its mod
+installed.
+
+Server / Sandbox, Mods, Logs, Players, Remote Control, and admin user
+management have no mod dependency and are always available.
 
 ## Auth
 
