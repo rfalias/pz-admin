@@ -169,8 +169,10 @@ can restart it.
 ### Item icons (optional)
 
 Shops and the breadcrumb map's item-pickup markers look up item display
-names/icons from `src/items_index.json` + `src/static/images/`, which
-aren't checked into this repo (thousands of extracted game-asset PNGs,
-~36MB). Without them the app runs fine — those features just fall back to
-the item's raw internal name and no icon. `src/items_index.py` documents
-the expected JSON shape if you want to build your own index.
+names/icons from `src/items_index.json` (fullType → displayName/category/
+tags/icon filename for every base-game + AuthenticZ item — checked in,
+should be useful on its own even outside this app). The icon *images* it
+points at (`src/static/images/`, thousands of extracted game-asset PNGs,
+~36MB) aren't checked in though — without them the app still shows correct
+item names, just no icon. `src/items_index.py` documents the expected JSON
+shape if you want to build your own index or regenerate the icon set.

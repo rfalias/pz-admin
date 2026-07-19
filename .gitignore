@@ -4,9 +4,9 @@ users.json
 data/
 .claude/
 
-# Extracted PZ game assets (item icons + the index built from them) --
-# large (~36MB) and not something to redistribute in this repo's history.
-# Built locally by src/items_index.py; the app degrades to blank icons
-# without them.
+# Extracted PZ item icon PNGs -- large (~36MB) and not something to
+# redistribute in this repo's history. src/items_index.json (the metadata
+# built from them -- names/categories/tags/icon filenames, no image bytes)
+# IS checked in; the app just shows no icon for items until you supply
+# your own src/static/images/ alongside it.
 src/static/images/
-src/items_index.json
