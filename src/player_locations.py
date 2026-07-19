@@ -1,25 +1,94 @@
 import json
 from pathlib import Path
 
+# The mod's writer switched from one-JSON-object-per-line to this compact
+# CSV form (~60% smaller, verified with a round-trip encode/decode test):
+#   x,y,z,lastUpdated,action_code[,extra...]
+# k (killed_zombie) carries one extra field (totalKills); p (picked_up)
+# carries two (item, itemId). kill_tally.txt is unaffected -- it's a single
+# overwritten line, not an accumulating log, so the byte-savings concern
+# doesn't apply there.
+_ACTION_CODES = {"t": "tick", "d": "died", "k": "killed_zombie", "p": "picked_up"}
+_CODES_BY_ACTION = {v: k for k, v in _ACTION_CODES.items()}
+
 
 def _history_path(username: str, base_dir: Path) -> Path:
     return base_dir / username / "location_history.txt"
 
 
+def _parse_json_line(line: str) -> dict | None:
+    try:
+        return json.loads(line)
+    except json.JSONDecodeError:
+        return None
+
+
+def _parse_csv_line(line: str) -> dict | None:
+    parts = line.split(",")
+    if len(parts) < 5:
+        return None
+    action = _ACTION_CODES.get(parts[4])
+    if action is None:
+        return None
+    try:
+        entry = {
+            "x": float(parts[0]),
+            "y": float(parts[1]),
+            "z": float(parts[2]),
+            "lastUpdated": int(float(parts[3])),
+            "action": action,
+        }
+    except ValueError:
+        return None
+    if action == "killed_zombie" and len(parts) > 5:
+        try:
+            entry["totalKills"] = int(parts[5])
+        except ValueError:
+            pass
+    elif action == "picked_up" and len(parts) > 6:
+        entry["item"] = parts[5]
+        entry["itemId"] = parts[6]
+    return entry
+
+
 def _parse_lines(lines: list[str]) -> list[dict]:
+    """Handles both the old JSON-per-line format and the new compact CSV
+    one -- this is an accumulating log, not a snapshot, so lines written
+    before the mod upgrade stay JSON forever unless a partial clear
+    happens to rewrite (and thereby upgrade) them. Malformed lines of
+    either kind are skipped rather than failing the whole read."""
     entries = []
     for raw_line in lines:
         line = raw_line.strip()
         if not line:
             continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
+        entry = _parse_json_line(line) if line.startswith("{") else _parse_csv_line(line)
+        if entry is None:
             continue
         if "x" not in entry or "y" not in entry or "lastUpdated" not in entry:
             continue
         entries.append(entry)
     return entries
+
+
+def _format_csv_line(e: dict) -> str:
+    """Serializes back into the compact writer format -- used when
+    clear_location_history rewrites a kept subset, which also upgrades any
+    old JSON-format lines it happens to keep."""
+    code = _CODES_BY_ACTION.get(e.get("action", "tick"), "t")
+    parts = [
+        f"{e['x']:.2f}",
+        f"{e['y']:.2f}",
+        f"{e.get('z', 0.0):.2f}",
+        str(int(e["lastUpdated"])),
+        code,
+    ]
+    if code == "k" and e.get("totalKills") is not None:
+        parts.append(str(e["totalKills"]))
+    elif code == "p" and e.get("item") is not None:
+        parts.append(str(e["item"]))
+        parts.append(str(e.get("itemId", "")))
+    return ",".join(parts)
 
 
 def read_location_history(username: str, base_dir: Path) -> list[dict]:
@@ -137,7 +206,7 @@ def clear_location_history(
         path.unlink()
     else:
         path.write_text(
-            "\n".join(json.dumps(e, separators=(",", ":")) for e in kept) + "\n",
+            "\n".join(_format_csv_line(e) for e in kept) + "\n",
             encoding="utf-8",
         )
     return len(to_remove)
