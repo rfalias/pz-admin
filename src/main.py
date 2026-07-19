@@ -90,6 +90,25 @@ MOD_TITLES_REFRESH_INTERVAL_SECONDS = int(os.environ.get("MOD_TITLES_REFRESH_INT
 USERS_FILE = Path(os.environ.get("USERS_FILE", "/app/users.json"))
 RUNTIME_CONFIG_PATH = APP_DATA_DIR / "runtime_config.json"
 
+# Features that only produce real data if a specific optional Workshop mod
+# is installed -- toggleable in Settings so a server that doesn't run one
+# can hide its (otherwise permanently-empty-looking) tab. Default True so
+# existing deployments don't lose tabs on upgrade.
+FEATURE_BATTLEPASS = True
+FEATURE_SHOPS = True
+FEATURE_SPAWNPOINTS = True
+FEATURE_PLAYER_LOCATIONS = True
+
+# name -> [(mod display name, workshop id), ...], used by the Settings page
+# to link each toggle to the mod(s) it needs and show whether that mod is
+# currently in this server's own WorkshopItems list.
+REQUIRED_MODS = {
+    "battlepass": [("BattlePass", 3756808742)],
+    "shops": [("PlayerShops", 3749824460)],
+    "spawnpoints": [("DynamicSpawnPoints", 3759808711), ("EventManager", 3762284248)],
+    "player_locations": [("PlayerLocationReporter", 3767193809)],
+}
+
 
 def _load_runtime_config_overrides() -> dict:
     if not RUNTIME_CONFIG_PATH.exists():
@@ -117,6 +136,7 @@ def _apply_runtime_config(values: dict) -> None:
     RCON_PASSWORD means "keep the current one"."""
     global PZ_CONTAINER_NAME, SERVER_NAME, RCON_HOST, RCON_PORT, RCON_PASSWORD
     global CONNECT_HOST, DEATH_SCAN_INTERVAL_SECONDS, MOD_TITLES_REFRESH_INTERVAL_SECONDS
+    global FEATURE_BATTLEPASS, FEATURE_SHOPS, FEATURE_SPAWNPOINTS, FEATURE_PLAYER_LOCATIONS
 
     if values.get("PZ_CONTAINER_NAME"):
         PZ_CONTAINER_NAME = values["PZ_CONTAINER_NAME"]
@@ -139,6 +159,26 @@ def _apply_runtime_config(values: dict) -> None:
         and values["MOD_TITLES_REFRESH_INTERVAL_SECONDS"] != ""
     ):
         MOD_TITLES_REFRESH_INTERVAL_SECONDS = int(values["MOD_TITLES_REFRESH_INTERVAL_SECONDS"])
+
+    # Booleans: unlike the string fields above, False is a legitimate value
+    # to apply, so this must check *presence* in values, not truthiness.
+    if "FEATURE_BATTLEPASS" in values:
+        FEATURE_BATTLEPASS = bool(values["FEATURE_BATTLEPASS"])
+    if "FEATURE_SHOPS" in values:
+        FEATURE_SHOPS = bool(values["FEATURE_SHOPS"])
+    if "FEATURE_SPAWNPOINTS" in values:
+        FEATURE_SPAWNPOINTS = bool(values["FEATURE_SPAWNPOINTS"])
+    if "FEATURE_PLAYER_LOCATIONS" in values:
+        FEATURE_PLAYER_LOCATIONS = bool(values["FEATURE_PLAYER_LOCATIONS"])
+
+
+def _feature_enabled(name: str) -> bool:
+    return {
+        "battlepass": FEATURE_BATTLEPASS,
+        "shops": FEATURE_SHOPS,
+        "spawnpoints": FEATURE_SPAWNPOINTS,
+        "player_locations": FEATURE_PLAYER_LOCATIONS,
+    }.get(name, True)
 
 
 _apply_runtime_config(_load_runtime_config_overrides())
@@ -195,6 +235,7 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 # Cache-busts static assets (css/js) on every deploy, since browsers otherwise
 # keep serving a stale cached copy after `docker compose up -d --build`.
 templates.env.globals["static_version"] = str(int(time.time()))
+templates.env.globals["feature_enabled"] = _feature_enabled
 
 
 def combined_server_status() -> dict:
@@ -364,6 +405,26 @@ def _load_installed_mods(entries: list) -> list[dict]:
     return mods
 
 
+def _required_mods_status() -> dict[str, list[dict]]:
+    """For each feature in REQUIRED_MODS: its mod name(s), Workshop link(s),
+    and whether that mod id is currently in *this* server's own
+    WorkshopItems list -- same signal _load_installed_mods already trusts
+    for the dashboard's mod tags."""
+    entries = ini_config.parse_ini(SERVER_INI_PATH)
+    workshop_ids = set(ini_config.split_list(ini_config.get_value(entries, "WorkshopItems")))
+    return {
+        feature: [
+            {
+                "name": mod_name,
+                "url": f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}",
+                "installed": str(workshop_id) in workshop_ids,
+            }
+            for mod_name, workshop_id in mods
+        ]
+        for feature, mods in REQUIRED_MODS.items()
+    }
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request):
     entries = ini_config.parse_ini(SERVER_INI_PATH)
@@ -375,8 +436,8 @@ def dashboard_page(request: Request):
             "description": ini_config.get_value(entries, "PublicDescription"),
             "connect_host": CONNECT_HOST,
             "connect_port": ini_config.get_value(entries, "DefaultPort", "16261"),
-            "leaderboard": _load_battlepass_leaderboard(),
-            "kill_leaderboard": _kill_leaderboard(),
+            "leaderboard": _load_battlepass_leaderboard() if FEATURE_BATTLEPASS else None,
+            "kill_leaderboard": _kill_leaderboard() if FEATURE_PLAYER_LOCATIONS else [],
             "mods": _load_installed_mods(entries),
         },
     )
@@ -746,11 +807,14 @@ async def versions_delete(
 def spawnpoints_page(request: Request, user: User | None = Depends(current_user_optional)):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
-    entries = dynamic_spawnpoints.parse_file(SPAWNPOINTS_PATH)
-    zones = event_manager.zones_with_points(
-        event_manager.read_zones(EVENT_TRIGGER_ZONES_PATH),
-        event_manager.read_spawn_points(EVENT_SPAWN_POINTS_PATH),
-    )
+    if FEATURE_SPAWNPOINTS:
+        entries = dynamic_spawnpoints.parse_file(SPAWNPOINTS_PATH)
+        zones = event_manager.zones_with_points(
+            event_manager.read_zones(EVENT_TRIGGER_ZONES_PATH),
+            event_manager.read_spawn_points(EVENT_SPAWN_POINTS_PATH),
+        )
+    else:
+        entries, zones = [], []
     return templates.TemplateResponse(
         request,
         "spawnpoints.html",
@@ -979,7 +1043,7 @@ def playershops_page(
         return RedirectResponse("/dashboard", status_code=303)
     lines = max(10, min(lines, MAX_LOG_LINES))
     selected = _selected_shop_types(types)
-    entries = player_shops.read_transactions(PLAYERSHOPS_LOG_PATH, lines, selected)
+    entries = player_shops.read_transactions(PLAYERSHOPS_LOG_PATH, lines, selected) if FEATURE_SHOPS else []
     return templates.TemplateResponse(
         request,
         "playershops.html",
@@ -1019,7 +1083,7 @@ def shops_page(
 ):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
-    shops = admin_shops.read_shops(ADMIN_SHOP_REGISTRY_PATH)
+    shops = admin_shops.read_shops(ADMIN_SHOP_REGISTRY_PATH) if FEATURE_SHOPS else []
     return templates.TemplateResponse(
         request,
         "shops.html",
@@ -1190,8 +1254,8 @@ def battlepass_page(request: Request, user: User | None = Depends(current_user_o
             "container": PZ_CONTAINER_NAME,
             "flash": pop_flash(request),
             "data_path": str(BATTLEPASS_DATA_PATH),
-            "leaderboard": _load_battlepass_leaderboard(),
-            "kill_leaderboard": _kill_leaderboard(),
+            "leaderboard": _load_battlepass_leaderboard() if FEATURE_BATTLEPASS else None,
+            "kill_leaderboard": _kill_leaderboard() if FEATURE_PLAYER_LOCATIONS else [],
         },
     )
 
@@ -1202,6 +1266,9 @@ def battlepass_player_page(
 ):
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
+    if not FEATURE_BATTLEPASS:
+        request.session["flash"] = "Battle Pass is disabled in Settings."
+        return RedirectResponse("/battlepass", status_code=303)
     raw_data = battlepass_data.load_battlepass_data(BATTLEPASS_DATA_PATH)
     detail = battlepass_data.build_player_detail(raw_data, username) if raw_data else None
     if detail is None:
@@ -1231,9 +1298,12 @@ def battlepass_logs_page(
     if not user:
         return RedirectResponse("/dashboard", status_code=303)
     lines = max(10, min(lines, 2000))
-    entries, file_names = battlepass_logs.read_battlepass_logs(
-        LOGS_DIR, lines, file_name=file, player_filter=player or None
-    )
+    if FEATURE_BATTLEPASS:
+        entries, file_names = battlepass_logs.read_battlepass_logs(
+            LOGS_DIR, lines, file_name=file, player_filter=player or None
+        )
+    else:
+        entries, file_names = [], []
     return templates.TemplateResponse(
         request,
         "logs_battlepass.html",
@@ -1277,11 +1347,14 @@ def stats_page(request: Request, user: User | None = Depends(current_user_option
     characters = db_stats.list_characters(SAVE_DB_PATH)
     death_tracker.scan_logs(DEATH_LOG_PATH, DEATHS_DB_PATH)
     death_counts = death_tracker.get_death_counts(DEATHS_DB_PATH)
-    locations = {
-        u["username"].lower(): player_locations.latest_location(u["username"], PLAYER_LOCATIONS_DIR)
-        for u in users
-    }
-    kill_tallies = player_locations.all_kill_tallies(PLAYER_LOCATIONS_DIR)
+    if FEATURE_PLAYER_LOCATIONS:
+        locations = {
+            u["username"].lower(): player_locations.latest_location(u["username"], PLAYER_LOCATIONS_DIR)
+            for u in users
+        }
+        kill_tallies = player_locations.all_kill_tallies(PLAYER_LOCATIONS_DIR)
+    else:
+        locations, kill_tallies = {}, {}
     return templates.TemplateResponse(
         request,
         "stats.html",
@@ -1330,42 +1403,47 @@ def player_detail_page(
     death_tracker.scan_logs(DEATH_LOG_PATH, DEATHS_DB_PATH)
     deaths = death_tracker.get_deaths_for_user(DEATHS_DB_PATH, username)
 
-    raw_bp = battlepass_data.load_battlepass_data(BATTLEPASS_DATA_PATH)
-    battlepass = battlepass_data.build_player_detail(raw_bp, username) if raw_bp else None
+    battlepass = None
+    if FEATURE_BATTLEPASS:
+        raw_bp = battlepass_data.load_battlepass_data(BATTLEPASS_DATA_PATH)
+        battlepass = battlepass_data.build_player_detail(raw_bp, username) if raw_bp else None
 
-    all_locations = player_locations.read_location_history(username, PLAYER_LOCATIONS_DIR)
-    filtered_locations = player_locations.filter_by_timeframe(all_locations, start, end)
-    recent_locations = list(reversed(filtered_locations[-50:]))
-    for loc in recent_locations:
-        if loc.get("action") == "picked_up" and loc.get("item"):
-            loc["icon_url"] = items_index.icon_url(loc["item"])
-            loc["display_name"] = items_index.display_name(loc["item"], loc["item"])
-
-    kill_tally = player_locations.read_kill_tally(username, PLAYER_LOCATIONS_DIR)
-
-    MAX_TRAIL_POINTS = 2000
-    trail_source = filtered_locations[-MAX_TRAIL_POINTS:]
+    all_locations, filtered_locations, recent_locations = [], [], []
+    kill_tally = None
     map_config = None
     trail_points_json = "[]"
-    if trail_source:
-        try:
-            image_points = map_preview.world_points_to_image(
-                [(e["x"], e["y"]) for e in trail_source], LOGS_DIR
-            )
-            trail_points = []
-            for (px, py), e in zip(image_points, trail_source):
-                point = {"px": px, "py": py, "t": e["lastUpdated"], "action": e.get("action", "tick")}
-                if point["action"] == "picked_up" and e.get("item"):
-                    point["item"] = e["item"]
-                    point["itemName"] = items_index.display_name(e["item"], e["item"])
-                    point["icon"] = items_index.icon_url(e["item"])
-                elif point["action"] == "killed_zombie" and e.get("totalKills") is not None:
-                    point["totalKills"] = e["totalKills"]
-                trail_points.append(point)
-            trail_points_json = json.dumps(trail_points)
-            map_config = map_preview.get_map_config(LOGS_DIR)
-        except Exception:
-            map_config = None
+    MAX_TRAIL_POINTS = 2000
+    if FEATURE_PLAYER_LOCATIONS:
+        all_locations = player_locations.read_location_history(username, PLAYER_LOCATIONS_DIR)
+        filtered_locations = player_locations.filter_by_timeframe(all_locations, start, end)
+        recent_locations = list(reversed(filtered_locations[-50:]))
+        for loc in recent_locations:
+            if loc.get("action") == "picked_up" and loc.get("item"):
+                loc["icon_url"] = items_index.icon_url(loc["item"])
+                loc["display_name"] = items_index.display_name(loc["item"], loc["item"])
+
+        kill_tally = player_locations.read_kill_tally(username, PLAYER_LOCATIONS_DIR)
+
+        trail_source = filtered_locations[-MAX_TRAIL_POINTS:]
+        if trail_source:
+            try:
+                image_points = map_preview.world_points_to_image(
+                    [(e["x"], e["y"]) for e in trail_source], LOGS_DIR
+                )
+                trail_points = []
+                for (px, py), e in zip(image_points, trail_source):
+                    point = {"px": px, "py": py, "t": e["lastUpdated"], "action": e.get("action", "tick")}
+                    if point["action"] == "picked_up" and e.get("item"):
+                        point["item"] = e["item"]
+                        point["itemName"] = items_index.display_name(e["item"], e["item"])
+                        point["icon"] = items_index.icon_url(e["item"])
+                    elif point["action"] == "killed_zombie" and e.get("totalKills") is not None:
+                        point["totalKills"] = e["totalKills"]
+                    trail_points.append(point)
+                trail_points_json = json.dumps(trail_points)
+                map_config = map_preview.get_map_config(LOGS_DIR)
+            except Exception:
+                map_config = None
 
     return templates.TemplateResponse(
         request,
@@ -1638,8 +1716,54 @@ async def settings_page(request: Request, user: User | None = Depends(current_us
             "current_user_id": str(user.id),
             "env_settings": env_settings,
             "paths": paths,
+            "features": {
+                "battlepass": FEATURE_BATTLEPASS,
+                "shops": FEATURE_SHOPS,
+                "spawnpoints": FEATURE_SPAWNPOINTS,
+                "player_locations": FEATURE_PLAYER_LOCATIONS,
+            },
+            "required_mods": _required_mods_status(),
         },
     )
+
+
+@app.post("/settings/features")
+async def settings_save_features(
+    request: Request,
+    feature_battlepass: bool = Form(False),
+    feature_shops: bool = Form(False),
+    feature_spawnpoints: bool = Form(False),
+    feature_player_locations: bool = Form(False),
+    user: User | None = Depends(current_user_optional),
+):
+    denied = _require_admin(request, user)
+    if denied:
+        return denied
+
+    values = {
+        "FEATURE_BATTLEPASS": feature_battlepass,
+        "FEATURE_SHOPS": feature_shops,
+        "FEATURE_SPAWNPOINTS": feature_spawnpoints,
+        "FEATURE_PLAYER_LOCATIONS": feature_player_locations,
+    }
+    old = {
+        "FEATURE_BATTLEPASS": FEATURE_BATTLEPASS,
+        "FEATURE_SHOPS": FEATURE_SHOPS,
+        "FEATURE_SPAWNPOINTS": FEATURE_SPAWNPOINTS,
+        "FEATURE_PLAYER_LOCATIONS": FEATURE_PLAYER_LOCATIONS,
+    }
+
+    _apply_runtime_config(values)
+
+    stored = _load_runtime_config_overrides()
+    stored.update(values)
+    RUNTIME_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUNTIME_CONFIG_PATH.write_text(json.dumps(stored))
+
+    diffs = [f"{k}: {old[k]!r} -> {values[k]!r}" for k in old if old[k] != values[k]]
+    await _audit(request, "feature_flags_save", user.username, detail=_format_diff_detail(diffs))
+    request.session["flash"] = "Feature settings saved."
+    return RedirectResponse("/settings", status_code=303)
 
 
 @app.post("/settings/environment")

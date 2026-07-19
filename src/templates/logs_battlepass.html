@@ -2,6 +2,9 @@
 {% block content %}
 {% include "_logs_subnav.html" %}
 
+{% if not feature_enabled('battlepass') %}
+<p class="empty">Battle Pass is disabled. <a href="/settings">Enable it in Settings</a> if you run the BattlePass mod.</p>
+{% else %}
 <form method="get" action="/logs/battlepass" class="bp-controls" id="bp-form">
   <label for="bp-file">File</label>
   <select id="bp-file" name="file" onchange="this.form.requestSubmit()">
@@ -127,4 +130,5 @@
   }
 })();
 </script>
+{% endif %}
 {% endblock %}

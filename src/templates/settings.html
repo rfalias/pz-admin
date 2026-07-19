@@ -58,6 +58,41 @@
 </div>
 
 <div class="group">
+  <div class="group-summary-static">Optional Features</div>
+  <div class="group-body">
+    <p class="help">Hide tabs/sections for mods you don't run on this server. Turning one off doesn't delete any data &mdash; it just stops showing an empty-looking tab.</p>
+    <form method="post" action="/settings/features" class="settings-features-form">
+      {% set feature_labels = {
+        "battlepass": ("feature_battlepass", "Battle Pass", "Leaderboard tab, per-player detail, dashboard section, and the Battle Pass logs sub-tab."),
+        "shops": ("feature_shops", "Shops", "Both the Shops (admin catalog) and Player Shops (transaction log) tabs."),
+        "spawnpoints": ("feature_spawnpoints", "Dynamic Spawnpoints", "Event Spawns and Trigger Zones tabs."),
+        "player_locations": ("feature_player_locations", "Player Location Tracking", "The breadcrumb map, zombie-kill counts, and Top Zombie Killers leaderboards."),
+      } %}
+      {% for key, info in feature_labels.items() %}
+      {% set field_name, label, description = info %}
+      <div class="feature-field">
+        <label class="settings-checkbox-label">
+          <input type="checkbox" name="{{ field_name }}" {% if features[key] %}checked{% endif %}>
+          {{ label }}
+        </label>
+        <p class="help">{{ description }}</p>
+        <p class="help">
+          Requires:
+          {% for mod in required_mods[key] %}
+          <a href="{{ mod.url }}" target="_blank" rel="noopener">{{ mod.name }}</a>
+          <span class="settings-badge {{ 'settings-badge-active' if mod.installed else 'settings-badge-disabled' }}">
+            {{ "installed" if mod.installed else "not found in Mods list" }}
+          </span>
+          {% endfor %}
+        </p>
+      </div>
+      {% endfor %}
+      <button type="submit" class="save-btn">Save feature settings</button>
+    </form>
+  </div>
+</div>
+
+<div class="group">
   <div class="group-summary-static">Add user</div>
   <div class="group-body">
     <form method="post" action="/settings/users" class="settings-add-form">

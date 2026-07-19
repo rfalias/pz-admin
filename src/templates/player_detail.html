@@ -79,7 +79,9 @@
 <details class="group" {% if battlepass %}open{% endif %}>
   <summary>Battle Pass</summary>
   <div class="group-body">
-    {% if not battlepass %}
+    {% if not feature_enabled('battlepass') %}
+    <p class="empty">Battle Pass is disabled. <a href="/settings">Enable it in Settings</a> if you run the BattlePass mod.</p>
+    {% elif not battlepass %}
     <p class="empty">No battle pass data found for this player.</p>
     {% else %}
     <p class="help">Balance: {{ battlepass.balance }} &middot; Lifetime earned: {{ battlepass.lifetime_earned }} &middot; Claimed items: {{ battlepass.claimed_items_count }} &middot; <a href="/battlepass/player/{{ username }}">Full battle pass detail &rarr;</a></p>
@@ -93,8 +95,11 @@
 </details>
 
 <details class="group" open>
-  <summary>Location History ({{ total_location_count }} total{% if filtered_location_count != total_location_count %}, {{ filtered_location_count }} in range{% endif %})</summary>
+  <summary>Location History{% if feature_enabled('player_locations') %} ({{ total_location_count }} total{% if filtered_location_count != total_location_count %}, {{ filtered_location_count }} in range{% endif %}){% endif %}</summary>
   <div class="group-body">
+    {% if not feature_enabled('player_locations') %}
+    <p class="empty">Player Location Tracking is disabled. <a href="/settings">Enable it in Settings</a> if you run the PlayerLocationReporter mod.</p>
+    {% else %}
     {% if kill_tally %}
     <p class="help">Zombie kills logged: <strong>{{ kill_tally.kills }}</strong> (as of <span class="local-time" data-epoch="{{ kill_tally.lastUpdated }}"></span>)</p>
     {% endif %}
@@ -167,6 +172,7 @@
         {% endif %}
       </div>
     </details>
+    {% endif %}
     {% endif %}
   </div>
 </details>

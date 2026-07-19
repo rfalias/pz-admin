@@ -518,6 +518,31 @@ main.main-wide {
   padding: 0.7rem 1rem;
 }
 
+/* Deliberately not .field -- .field label forces display:block, which would
+   fight .settings-checkbox-label's own flex layout for the checkbox row. */
+.settings-features-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.feature-field {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+}
+
+.feature-field .settings-checkbox-label {
+  font-size: 0.95rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.feature-field .help {
+  margin: 0.3rem 0 0;
+}
+
 .field label {
   font-weight: 600;
   display: block;

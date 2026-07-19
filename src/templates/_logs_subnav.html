@@ -1,4 +1,4 @@
 <div class="subnav">
   <a href="/logs" class="{{ 'active' if subtab == 'server' else '' }}">Server Logs</a>
-  <a href="/logs/battlepass" class="{{ 'active' if subtab == 'battlepass' else '' }}">Battle Pass</a>
+  {% if feature_enabled('battlepass') %}<a href="/logs/battlepass" class="{{ 'active' if subtab == 'battlepass' else '' }}">Battle Pass</a>{% endif %}
 </div>

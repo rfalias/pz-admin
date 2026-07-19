@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if not feature_enabled('spawnpoints') %}
+<p class="empty">Dynamic Spawnpoints is disabled. <a href="/settings">Enable it in Settings</a> if you run the DynamicSpawnPoints and/or EventManager mods.</p>
+{% else %}
 <div class="subtabs" id="spawnpoints-subtabs">
   <button type="button" class="subtab active" data-tab="event-spawns">Event Spawns</button>
   <button type="button" class="subtab" data-tab="trigger-zones">Trigger Zones</button>
@@ -130,4 +133,5 @@
   window.EVENT_ZONE_LIMITS = {{ zone_limits | tojson }};
 </script>
 <script src="/static/event_zones.js?v={{ static_version }}" defer></script>
+{% endif %}
 {% endblock %}

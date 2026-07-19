@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if not feature_enabled('shops') %}
+<p class="empty">Shops is disabled. <a href="/settings">Enable it in Settings</a> if you run the PlayerShops mod.</p>
+{% else %}
 <p class="config-path">{{ config_path }}</p>
 <p class="help">Admin-registered shops from the PlayerShops mod. Hover a shop's coordinates for a map preview, or click to open the full map. Add/remove items and edit prices below, then Save.</p>
 
@@ -119,4 +122,5 @@
 </script>
 <script src="/static/items_datalist.js?v={{ static_version }}" defer></script>
 <script src="/static/shops.js?v={{ static_version }}" defer></script>
+{% endif %}
 {% endblock %}

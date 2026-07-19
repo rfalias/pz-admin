@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if not feature_enabled('shops') %}
+<p class="empty">Player Shops is disabled. <a href="/settings">Enable it in Settings</a> if you run the PlayerShops mod.</p>
+{% else %}
 <p class="config-path">{{ config_path }}</p>
 
 <form method="get" action="/playershops" class="logs-controls" id="playershops-form">
@@ -177,4 +180,5 @@
     });
   });
 </script>
+{% endif %}
 {% endblock %}

@@ -17,6 +17,7 @@ ACTIONS = {
     "version_apply": "Config version applied",
     "version_delete": "Config version deleted",
     "env_settings_save": "Environment settings saved",
+    "feature_flags_save": "Feature settings saved",
     "spawnpoints_save": "Spawn points saved",
     "shops_save": "Shops saved",
     "event_zones_save": "Trigger zones saved",

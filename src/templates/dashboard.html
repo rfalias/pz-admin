@@ -60,6 +60,7 @@
       </div>
     </details>
 
+    {% if feature_enabled('player_locations') %}
     <div class="group">
       <div class="group-summary-static">Top Zombie Killers</div>
       <div class="group-body">
@@ -89,7 +90,9 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
 
+    {% if feature_enabled('battlepass') %}
     <div class="group">
       <div class="group-summary-static">
         Battle Pass Leaderboard{% if leaderboard and leaderboard.season_name %} &mdash; {{ leaderboard.season_name }}{% endif %}
@@ -155,6 +158,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
   </main>
 
   <script>
